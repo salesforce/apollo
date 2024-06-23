@@ -83,9 +83,10 @@ import static com.salesforce.apollo.fireflies.comm.gossip.FfClient.getCreate;
  * @since 220
  */
 public class View {
-    private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
+    private static final String FINALIZE_VIEW_CHANGE  = "Finalize View Change";
     private static final Logger log                   = LoggerFactory.getLogger(View.class);
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
+    private static final String CLEAR_OBSERVATIONS    = "Clear Observations";
 
     final            CommonCommunications<Fireflies, Service>    comm;
     final            AtomicBoolean                               started             = new AtomicBoolean();
@@ -98,7 +99,7 @@ public class View {
     private final    Executor                                    viewNotificationQueue;
     private final    FireflyMetrics                              metrics;
     private final    Node                                        node;
-    private final    Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
+    private final    Map<Digest, SVU>                            observations        = new ConcurrentSkipListMap<>();
     private final    Parameters                                  params;
     private final    ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
     private final    RoundScheduler                              roundTimers;
@@ -109,6 +110,7 @@ public class View {
     private final    EventValidation                             validation;
     private final    Verifiers                                   verifiers;
     private volatile ScheduledFuture<?>                          futureGossip;
+    private volatile boolean                                     boostrap            = false;
 
     public View(DynamicContext<Participant> context, ControlledIdentifierMember member, String endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
@@ -325,6 +327,7 @@ public class View {
     }
 
     void bootstrap(NoteWrapper nw, Duration dur) {
+        boostrap = true;
         viewManagement.bootstrap(nw, dur);
     }
 
@@ -344,45 +347,23 @@ public class View {
             return;
         }
         viewChange(() -> {
-            final var current = currentView();
+            removeTimer(View.FINALIZE_VIEW_CHANGE);
             final var supermajority = context.getRingCount() * 3 / 4;
             final var majority = context.size() == 1 ? 1 : supermajority;
-            final var valid = observations.values()
-                                          .stream()
-                                          .filter(vc -> current.equals(Digest.from(vc.getChange().getCurrent())))
-                                          .filter(svc -> viewManagement.observers.contains(
-                                          Digest.from(svc.getChange().getObserver())))
-                                          .toList();
-            log.trace("Finalize view change, observations: {} valid: {} observers: {} on: {}",
-                      observations.values().stream().map(sv -> Digest.from(sv.getChange().getObserver())).toList(),
-                      valid.size(), viewManagement.observersList(), node.getId());
-            observations.clear();
-            if (valid.size() < majority) {
-                log.info("Do not have majority: {} required: {} observers: {} for: {} on: {}", valid.size(), majority,
-                         viewManagement.observersList(), currentView(), node.getId());
-                scheduleFinalizeViewChange(2);
+            log.info("Finalize view change, observations: {} observers: {} on: {}",
+                     observations.keySet().stream().toList(), viewManagement.observersList(), node.getId());
+            if (observations.size() < majority) {
+                log.info("Do not have majority: {} required: {} observers: {} for: {} on: {}", observations.size(),
+                         majority, viewManagement.observersList(), currentView(), node.getId());
+                scheduleFinalizeViewChange(1);
                 return;
             }
             log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(), majority,
                      viewManagement.observersList(), currentView(), node.getId());
             HashMultiset<Ballot> ballots = HashMultiset.create();
-            valid.forEach(vc -> {
-                final var leaving = vc.getChange()
-                                      .getLeavesList()
-                                      .stream()
-                                      .map(Digest::from)
-                                      .distinct()
-                                      .collect(Collectors.toCollection(ArrayList::new));
-                final var joining = vc.getChange()
-                                      .getJoinsList()
-                                      .stream()
-                                      .map(Digest::from)
-                                      .distinct()
-                                      .collect(Collectors.toCollection(ArrayList::new));
-                leaving.sort(Ordering.natural());
-                joining.sort(Ordering.natural());
-                ballots.add(new Ballot(Digest.from(vc.getChange().getCurrent()), leaving, joining, digestAlgo));
-            });
+            observations.values().forEach(svu -> tally(svu, ballots));
+            viewManagement.clearVote();
+            scheduleClearObservations();
             var max = ballots.entrySet()
                              .stream()
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
@@ -391,17 +372,15 @@ public class View {
                 log.info("View consensus successful: {} required: {} cardinality: {} for: {} on: {}", max, majority,
                          viewManagement.cardinality(), currentView(), node.getId());
                 viewManagement.install(max.getElement());
+                scheduleViewChange();
             } else {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
                 log.info("View consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
                          max == null ? 0 : max.getCount(), majority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).toList(), currentView(), node.getId());
+                viewManagement.initiateViewChange();
             }
-
-            scheduleViewChange();
-            removeTimer(View.FINALIZE_VIEW_CHANGE);
-            viewManagement.clearVote();
         });
     }
 
@@ -419,7 +398,7 @@ public class View {
     }
 
     void initiate(SignedViewChange viewChange) {
-        observations.put(node.getId(), viewChange);
+        observations.put(node.getId(), new SVU(viewChange, digestAlgo));
     }
 
     void introduced() {
@@ -521,6 +500,13 @@ public class View {
         Entropy.nextBitsStreamLong(duration.toNanos()), TimeUnit.NANOSECONDS);
     }
 
+    void scheduleClearObservations() {
+        if (!started.get()) {
+            return;
+        }
+        timers.put(CLEAR_OBSERVATIONS, roundTimers.schedule(CLEAR_OBSERVATIONS, () -> observations.clear(), 1));
+    }
+
     void scheduleFinalizeViewChange() {
         scheduleFinalizeViewChange(params.finalizeViewRounds());
     }
@@ -582,7 +568,7 @@ public class View {
         m.clearAccusations();
         var timer = pendingRebuttals.remove(m.getId());
         if (timer != null) {
-            log.debug("Cancelling accusation of: {} on: {}", m.getId(), node.getId());
+            log.info("Cancelling accusation of: {} on: {}", m.getId(), node.getId());
             timer.cancel();
         }
     }
@@ -691,8 +677,8 @@ public class View {
         member.addAccusation(node.accuse(member, ring));
         pendingRebuttals.computeIfAbsent(member.getId(),
                                          d -> roundTimers.schedule(() -> gc(member), params.rebuttalTimeout()));
-        log.debug("Accuse: {} on ring: {} view: {} (timer started): {} on: {}", member.getId(), ring, currentView(),
-                  e.getMessage(), node.getId());
+        log.info("Accuse: {} on ring: {} view: {} (timer started): {} on: {}", member.getId(), ring, currentView(),
+                 e.getMessage(), node.getId());
     }
 
     /**
@@ -754,15 +740,15 @@ public class View {
                                                                 accused)) {
                     if (!accused.verify(accusation.getSignature(),
                                         accusation.getWrapped().getAccusation().toByteString())) {
-                        log.trace("Accusation discarded, accusation by: {} accused:{} signature invalid on: {}",
+                        log.debug("Accusation discarded, accusation by: {} accused:{} signature invalid on: {}",
                                   accuser.getId(), accused.getId(), node.getId());
                         return false;
                     }
                     accused.addAccusation(accusation);
                     pendingRebuttals.computeIfAbsent(accused.getId(), d -> roundTimers.schedule(() -> gc(accused),
                                                                                                 params.rebuttalTimeout()));
-                    log.debug("{} accused by: {} on ring: {} (replacing: {}) on: {}", accused.getId(), accuser.getId(),
-                              accusation.getRingNumber(), currentAccuser.getId(), node.getId());
+                    log.info("{} accused by: {} on ring: {} (replacing: {}) on: {}", accused.getId(), accuser.getId(),
+                             accusation.getRingNumber(), currentAccuser.getId(), node.getId());
                     if (metrics != null) {
                         metrics.accusations().mark();
                     }
@@ -790,8 +776,8 @@ public class View {
             if (accuser.equals(predecessor)) {
                 accused.addAccusation(accusation);
                 if (!accused.equals(node) && !pendingRebuttals.containsKey(accused.getId())) {
-                    log.debug("{} accused by: {} on ring: {} (timer started) on: {}", accused.getId(), accuser.getId(),
-                              accusation.getRingNumber(), node.getId());
+                    log.info("{} accused by: {} on ring: {} (timer started) on: {}", accused.getId(), accuser.getId(),
+                             accusation.getRingNumber(), node.getId());
                     pendingRebuttals.computeIfAbsent(accused.getId(), d -> roundTimers.schedule(() -> gc(accused),
                                                                                                 params.rebuttalTimeout()));
                 }
@@ -841,41 +827,44 @@ public class View {
      * @param observation
      */
     private boolean add(SignedViewChange observation) {
-        final Digest observer = Digest.from(observation.getChange().getObserver());
-        if (!viewManagement.isObserver(observer)) {
-            log.trace("Invalid observer: {} current: {} on: {}", observer, currentView(), node.getId());
+        var svu = new SVU(observation, digestAlgo);
+        if (!viewManagement.isObserver(svu.observer)) {
+            log.trace("Invalid observer: {} current: {} on: {}", svu.observer, currentView(), node.getId());
             return false;
         }
         final var inView = Digest.from(observation.getChange().getCurrent());
         if (!currentView().equals(inView)) {
-            log.trace("Invalid view change: {} current: {} from {} on: {}", inView, currentView(), observer,
+            log.trace("Invalid view change: {} current: {} from {} on: {}", inView, currentView(), svu.observer,
                       node.getId());
             return false;
         }
-        var currentObservation = observations.get(observer);
-        if (currentObservation != null) {
-            if (observation.getChange().getAttempt() < currentObservation.getChange().getAttempt()) {
-                log.trace("Stale observation: {} current: {} view change: {} current: {} offline: {} on: {}",
-                          observation.getChange().getAttempt(), currentObservation.getChange().getAttempt(), inView,
-                          currentView(), observer, node.getId());
-                return false;
-            }
-        }
-        final var member = context.getActiveMember(observer);
+        final var member = context.getActiveMember(svu.observer);
         if (member == null) {
-            log.trace("Cannot validate view change: {} current: {} from: {} on: {}", inView, currentView(), observer,
+            log.trace("Cannot validate view change: {} current: {} from: {} on: {}", inView, currentView(),
+                      svu.observer, node.getId());
+            return false;
+        }
+        if (!viewManagement.isObserver(member.id)) {
+            log.trace("Not an observer of: {} current: {} from: {} on: {}", inView, currentView(), svu.observer,
                       node.getId());
             return false;
         }
-        return observations.computeIfAbsent(observer.prefix(observation.getChange().getAttempt()), p -> {
-            final var signature = JohnHancock.from(observation.getSignature());
-            if (!member.verify(signature, observation.getChange().toByteString())) {
-                return null;
+        final var signature = JohnHancock.from(observation.getSignature());
+        if (!member.verify(signature, observation.getChange().toByteString())) {
+            return false;
+        }
+        return observations.compute(svu.observer, (d, cur) -> {
+            if (cur != null) {
+                if (svu.attempt < cur.attempt) {
+                    log.trace("Stale observation: {} current: {} view change: {} current: {} offline: {} on: {}",
+                              svu.attempt, cur.attempt, inView, currentView(), svu.observer, node.getId());
+                    return cur;
+                }
             }
-            log.trace("Observation: {} current: {} view change: {} from: {} on: {}",
-                      observation.getChange().getAttempt(), inView, currentView(), observer, node.getId());
-            return observation;
-        }) != null;
+            log.trace("Observation: {} current: {} view change: {} from: {} on: {}", svu.attempt, inView, currentView(),
+                      svu.observer, node.getId());
+            return svu;
+        }) == svu;
     }
 
     private boolean addJoin(SignedNote sn) {
@@ -1049,7 +1038,7 @@ public class View {
     private BloomFilter<Digest> getObservationsBff(long seed, double p) {
         var n = Math.max(params.minimumBiffCardinality(), observations.size());
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, n, 1.0 / (double) n);
-        observations.keySet().stream().collect(Utils.toShuffledList()).forEach(bff::add);
+        observations.values().stream().map(svu -> svu.hash).collect(Utils.toShuffledList()).forEach(bff::add);
         return bff;
     }
 
@@ -1263,13 +1252,12 @@ public class View {
 
         // Add all updates that this view has that aren't reflected in the inbound bff
         final var current = currentView();
-        observations.entrySet()
+        observations.values()
                     .stream()
                     .collect(Utils.toShuffledList())
                     .stream()
-                    .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
-                    .filter(m -> !bff.contains(m.getKey()))
-                    .map(m -> m.getValue())
+                    .filter(svu -> !bff.contains(svu.hash))
+                    .map(svu -> svu.viewChange)
                     .forEach(n -> builder.addUpdates(n));
         return builder;
     }
@@ -1344,6 +1332,25 @@ public class View {
         return updatesForDigests(gossip);
     }
 
+    private void tally(SVU svu, HashMultiset<Ballot> ballots) {
+        var vc = svu.viewChange;
+        final var leaving = vc.getChange()
+                              .getLeavesList()
+                              .stream()
+                              .map(Digest::from)
+                              .distinct()
+                              .collect(Collectors.toCollection(ArrayList::new));
+        final var joining = vc.getChange()
+                              .getJoinsList()
+                              .stream()
+                              .map(Digest::from)
+                              .distinct()
+                              .collect(Collectors.toCollection(ArrayList::new));
+        leaving.sort(Ordering.natural());
+        joining.sort(Ordering.natural());
+        ballots.add(new Ballot(Digest.from(vc.getChange().getCurrent()), leaving, joining, digestAlgo));
+    }
+
     /**
      * Process the gossip reply. Return the gossip with the updates determined from the inbound digests.
      *
@@ -1380,13 +1387,12 @@ public class View {
         biff = gossip.getObservations().getBff();
         if (!biff.equals(Biff.getDefaultInstance())) {
             BloomFilter<Digest> obsvBff = BloomFilter.from(biff);
-            observations.entrySet()
+            observations.values()
                         .stream()
                         .collect(Utils.toShuffledList())
                         .stream()
-                        .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
-                        .filter(e -> !obsvBff.contains(e.getKey()))
-                        .forEach(e -> builder.addObservations(e.getValue()));
+                        .filter(svu -> !obsvBff.contains(svu.hash))
+                        .forEach(svu -> builder.addObservations(svu.viewChange));
         }
 
         biff = gossip.getJoins().getBff();
@@ -1461,6 +1467,19 @@ public class View {
     private boolean verify(SelfAddressingIdentifier id, SigningThreshold threshold, JohnHancock signature,
                            InputStream message) {
         return verifiers.verifierFor(id).map(value -> value.verify(threshold, signature, message)).orElse(false);
+    }
+
+    private record SVU(Digest observer, SignedViewChange viewChange, int attempt, Digest hash)
+    implements Comparable<SVU> {
+        public SVU(SignedViewChange signedViewChange, DigestAlgorithm algo) {
+            this(Digest.from(signedViewChange.getChange().getObserver()), signedViewChange,
+                 signedViewChange.getChange().getAttempt(), algo.digest(signedViewChange.toByteString()));
+        }
+
+        @Override
+        public int compareTo(SVU o) {
+            return Integer.compare(attempt, o.attempt);
+        }
     }
 
     public record Seed(SelfAddressingIdentifier identifier, String endpoint) {

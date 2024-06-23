@@ -189,6 +189,48 @@ public class ViewManagement {
     }
 
     /**
+     * Initiate the view change
+     */
+    void initiateViewChange() {
+        view.stable(() -> {
+            if (vote.get() != null) {
+                log.trace("Vote already cast for: {} on: {}", currentView(), node.getId());
+                return;
+            }
+            // Use pending rebuttals as a proxy for stability
+            if (view.hasPendingRebuttals()) {
+                log.debug("Pending rebuttals in view: {} on: {}", currentView(), node.getId());
+                view.scheduleViewChange(1);
+                return;
+            }
+            view.scheduleFinalizeViewChange();
+            if (!isObserver(node.getId())) {
+                log.debug("Initiating (non observer) view change: {} joins: {} leaves: {} on: {}", currentView(),
+                          joins.size(), view.streamShunned().count(), node.getId());
+                return;
+            }
+            log.debug("Initiating (observer) view change vote: {} joins: {} leaves: {} observers: {} on: {}",
+                      currentView(), joins.size(), view.streamShunned().count(), observersList(), node.getId());
+            final var builder = ViewChange.newBuilder()
+                                          .setObserver(node.getId().toDigeste())
+                                          .setCurrent(currentView().toDigeste())
+                                          .setAttempt(attempt.getAndIncrement())
+                                          .addAllJoins(joins.keySet().stream().map(Digest::toDigeste).toList());
+            view.streamShunned().map(Digest::toDigeste).forEach(builder::addLeaves);
+            ViewChange change = builder.build();
+            vote.set(change);
+            var signature = node.sign(change.toByteString());
+            final var viewChange = SignedViewChange.newBuilder()
+                                                   .setChange(change)
+                                                   .setSignature(signature.toSig())
+                                                   .build();
+            view.initiate(viewChange);
+            log.trace("View change vote: {} joins: {} leaves: {} on: {}", currentView(), change.getJoinsCount(),
+                      change.getLeavesCount(), node.getId());
+        });
+    }
+
+    /**
      * Install the new view
      *
      * @param ballot
@@ -427,17 +469,22 @@ public class ViewManagement {
         if (!joined()) {
             return;
         }
-        if (context.size() == 1 && joins.size() < context.getRingCount() - 1) {
-            log.trace("Cannot form cluster: {} with: {} members, required > 3 on: {}", currentView(),
-                      joins.size() + context.size(), node.getId());
+        if (bootstrap && context.size() == 1 && joins.size() < context.getRingCount() - 1) {
+            log.trace("Cannot form cluster: {} with: {} members, required >= {}} on: {}", currentView(),
+                      joins.size() + context.size(), context.getRingCount(), node.getId());
             view.scheduleViewChange();
             return;
+        } else if (!bootstrap) {
+            if (context.size() < context.getRingCount()) {
+                log.trace("Cannot initiate view change: {} with: {} members, required >= {}} on: {}", currentView(),
+                          joins.size() + context.size(), context.getRingCount(), node.getId());
+                view.scheduleViewChange();
+                return;
+            }
         }
         if ((context.offlineCount() > 0 || !joins.isEmpty())) {
             initiateViewChange();
         } else {
-            //            log.trace("No view change: {} joins: {} leaves: {} on: {}", currentView(), joins.size(),
-            //                      view.streamShunned().count(), node.getId());
             view.scheduleViewChange();
         }
     }
@@ -554,48 +601,6 @@ public class ViewManagement {
     void start(CompletableFuture<Void> onJoin, boolean bootstrap) {
         this.onJoined = onJoin;
         this.bootstrap = bootstrap;
-    }
-
-    /**
-     * Initiate the view change
-     */
-    private void initiateViewChange() {
-        view.stable(() -> {
-            if (vote.get() != null) {
-                log.trace("Vote already cast for: {} on: {}", currentView(), node.getId());
-                return;
-            }
-            // Use pending rebuttals as a proxy for stability
-            if (view.hasPendingRebuttals()) {
-                log.debug("Pending rebuttals in view: {} on: {}", currentView(), node.getId());
-                view.scheduleViewChange(1); // 1 TTL round to check again
-                return;
-            }
-            view.scheduleFinalizeViewChange();
-            if (!isObserver(node.getId())) {
-                log.debug("Initiating (non observer) view change: {} joins: {} leaves: {} on: {}", currentView(),
-                          joins.size(), view.streamShunned().count(), node.getId());
-                return;
-            }
-            log.debug("Initiating (observer) view change vote: {} joins: {} leaves: {} observers: {} on: {}",
-                      currentView(), joins.size(), view.streamShunned().count(), observersList(), node.getId());
-            final var builder = ViewChange.newBuilder()
-                                          .setObserver(node.getId().toDigeste())
-                                          .setCurrent(currentView().toDigeste())
-                                          .setAttempt(attempt.getAndIncrement())
-                                          .addAllJoins(joins.keySet().stream().map(Digest::toDigeste).toList());
-            view.streamShunned().map(Digest::toDigeste).forEach(builder::addLeaves);
-            ViewChange change = builder.build();
-            vote.set(change);
-            var signature = node.sign(change.toByteString());
-            final var viewChange = SignedViewChange.newBuilder()
-                                                   .setChange(change)
-                                                   .setSignature(signature.toSig())
-                                                   .build();
-            view.initiate(viewChange);
-            log.trace("View change vote: {} joins: {} leaves: {} on: {}", currentView(), change.getJoinsCount(),
-                      change.getLeavesCount(), node.getId());
-        });
     }
 
     /**

@@ -210,10 +210,9 @@ public class CHOAM {
     }
 
     public static Reconfigure reconfigure(Digest nextViewId, Map<Digest, Join> joins, int checkpointTarget) {
+        assert Dag.validate(joins.size()) : "Reconfigure joins: %s is not BFT".formatted(joins.size());
         var builder = Reconfigure.newBuilder().setCheckpointTarget(checkpointTarget).setId(nextViewId.toDigeste());
-
         joins.keySet().stream().sorted().map(joins::get).forEach(builder::addJoins);
-
         return builder.build();
     }
 
@@ -230,13 +229,6 @@ public class CHOAM {
                                            lastViewChange.hash))
                     .setReconfigure(reconfigure)
                     .build();
-    }
-
-    public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Digest> members) {
-        return members.stream()
-                      .map(baseContext::getMember)
-                      .filter(m -> m != null)
-                      .collect(Collectors.toMap(Member::getId, Function.identity()));
     }
 
     public static List<Transaction> toGenesisData(List<? extends Message> initializationData) {

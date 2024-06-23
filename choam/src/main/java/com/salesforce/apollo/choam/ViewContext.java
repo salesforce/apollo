@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
@@ -48,11 +49,10 @@ public class ViewContext {
         this.validators = validators;
         this.pendingViews = pendingViews;
 
-        var remapped = CHOAM.rosterMap(params.context(), context.allMembers().map(Member::getId).toList());
-        short pid = 0;
-        for (Digest d : remapped.keySet().stream().sorted().toList()) {
-            roster.put(remapped.get(d).getId(), pid++);
-        }
+        var pid = new AtomicInteger(0);
+        context.stream(1).forEach(m -> {
+            roster.put(m.getId(), (short) pid.getAndIncrement());
+        });
     }
 
     public static String print(Certification c, DigestAlgorithm algo) {

@@ -21,6 +21,7 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Config.Builder;
+import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Member;
@@ -325,8 +326,8 @@ public class Producer {
 
     private void reconfigure() {
         final var slate = assembly.getSlate();
-        assert slate != null && !slate.isEmpty() : "Slate is incorrect: %s".formatted(
-        slate.keySet().stream().sorted().toList());
+        assert slate != null && !slate.isEmpty() : slate == null ? "Slate is null" : "Slate is empty";
+        assert Dag.validate(slate.size()) : "Reconfigure joins: %s is not BFT".formatted(slate.size());
         var reconfiguration = new HashedBlock(params().digestAlgorithm(),
                                               view.reconfigure(slate, nextViewId, previousBlock.get(),
                                                                checkpoint.get()));

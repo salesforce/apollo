@@ -152,7 +152,13 @@ class Binding {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException e) {
-            log.warn("Error retrieving Gateway from: {} on: {}", member.getId(), node.getId(), e.getCause());
+            var cause = e.getCause();
+            if (cause instanceof StatusRuntimeException sre) {
+                log.warn("Error retrieving Gateway: {} from: {} on: {}", sre.getMessage(), member.getId(),
+                         node.getId());
+            } else {
+                log.error("Error retrieving Gateway from: {} on: {}", member.getId(), node.getId(), cause);
+            }
             dec(complete, remaining);
             return;
         }

@@ -18,6 +18,7 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.cryptography.proto.PubKey;
+import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.membership.Member;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -142,9 +143,9 @@ public class ViewAssembly {
         }
         views.forEach(svs -> {
             if (view.validate(svs)) {
-                log.info("Adding views: {} from: {} on: {}",
-                         svs.getViews().getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
-                         Digest.from(svs.getViews().getMember()), params().member().getId());
+                log.debug("Adding views: {} from: {} on: {}",
+                          svs.getViews().getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
+                          Digest.from(svs.getViews().getMember()), params().member().getId());
                 viewProposals.put(Digest.from(svs.getViews().getMember()), svs.getViews());
             } else {
                 log.warn("Invalid views: {} from: {} on: {}",
@@ -377,6 +378,8 @@ public class ViewAssembly {
                       params().member().getId());
         }
         var winner = ratification.getFirst();
+        assert Dag.validate(winner.getCommitteeCount()) : "Winner committee: %s is not BFT".formatted(
+        winner.getCommitteeList().size());
         selected = new Vue(Digest.from(winner.getDiadem()), assemblyOf(winner.getCommitteeList()),
                            winner.getMajority());
         if (log.isDebugEnabled()) {
@@ -408,8 +411,8 @@ public class ViewAssembly {
                 transitions.certified();
             } else {
                 countdown.set(4);
-                log.info("Not certifying: {} majority: {} slate: {} of: {} on: {}", nextViewId, selected.majority,
-                         proposals.keySet().stream().sorted().toList(), nextViewId, params().member().getId());
+                log.debug("Not certifying: {} majority: {} slate: {} of: {} on: {}", nextViewId, selected.majority,
+                          proposals.keySet().stream().sorted().toList(), nextViewId, params().member().getId());
             }
         }
 
@@ -420,7 +423,7 @@ public class ViewAssembly {
             if (proposals.size() >= selected.majority) {
                 transitions.chill();
             } else {
-                log.info("Check assembly: {} on: {}", proposals.size(), params().member().getId());
+                log.trace("Check assembly: {} on: {}", proposals.size(), params().member().getId());
             }
         }
 
