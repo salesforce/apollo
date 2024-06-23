@@ -28,10 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -54,7 +51,8 @@ public class Producer {
     private final        Transitions                  transitions;
     private final        ViewContext                  view;
     private final        Digest                       nextViewId;
-    private final        Semaphore                    serialize          = new Semaphore(1);
+    private final        Executor                     serialize          = Executors.newSingleThreadExecutor(
+    Thread.ofVirtual().factory());
     private final        ViewAssembly                 assembly;
     private final        int                          maxEpoch;
     private volatile     boolean                      assembled          = false;
@@ -351,22 +349,13 @@ public class Producer {
     }
 
     private void serial(List<ByteString> preblock, Boolean last) {
-        try {
-            serialize.acquire();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return;
-        }
-        Thread.ofVirtual().start(() -> {
+        serialize.execute(() -> {
             try {
                 create(preblock, last);
             } catch (Throwable t) {
                 log.error("Error processing preblock last: {} on: {}", last, params().member().getId(), t);
-            } finally {
-                serialize.release();
             }
         });
-
     }
 
     private PendingBlock validate(Validate v) {
