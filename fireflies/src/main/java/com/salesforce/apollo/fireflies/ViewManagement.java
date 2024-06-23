@@ -513,22 +513,22 @@ public class ViewManagement {
         final var requestView = Digest.from(registration.getView());
 
         if (!joined()) {
-            log.warn("Not joined, ignored seed view: {} from: {} on: {}", requestView, from, node.getId());
+            log.trace("Not joined, ignored seed view: {} from: {} on: {}", requestView, from, node.getId());
             return Redirect.getDefaultInstance();
         }
         if (!bootstrapView.equals(requestView)) {
-            log.warn("Invalid bootstrap view: {} expected: {} from: {} on: {}", bootstrapView, requestView, from,
-                     node.getId());
+            log.trace("Invalid bootstrap view: {} expected: {} from: {} on: {}", bootstrapView, requestView, from,
+                      node.getId());
             return Redirect.getDefaultInstance();
         }
         var note = new NoteWrapper(registration.getNote(), digestAlgo);
         if (!from.equals(note.getId())) {
-            log.warn("Invalid bootstrap note: {} from: {} claiming: {} on: {}", requestView, from, note.getId(),
-                     node.getId());
+            log.trace("Invalid bootstrap note: {} from: {} claiming: {} on: {}", requestView, from, note.getId(),
+                      node.getId());
             return Redirect.getDefaultInstance();
         }
         if (!view.validate(note.getIdentifier())) {
-            log.warn("Invalid identifier: {} from: {}  on: {}", note.getIdentifier(), from, node.getId());
+            log.trace("Invalid identifier: {} from: {}  on: {}", note.getIdentifier(), from, node.getId());
             return Redirect.getDefaultInstance();
         }
         return view.stable(() -> {
@@ -573,12 +573,12 @@ public class ViewManagement {
             }
             view.scheduleFinalizeViewChange();
             if (!isObserver(node.getId())) {
-                log.info("Initiating (non observer) view change: {} joins: {} leaves: {} on: {}", currentView(),
-                         joins.size(), view.streamShunned().count(), node.getId());
+                log.debug("Initiating (non observer) view change: {} joins: {} leaves: {} on: {}", currentView(),
+                          joins.size(), view.streamShunned().count(), node.getId());
                 return;
             }
-            log.warn("Initiating (observer) view change vote: {} joins: {} leaves: {} observers: {} on: {}",
-                     currentView(), joins.size(), view.streamShunned().count(), observersList(), node.getId());
+            log.debug("Initiating (observer) view change vote: {} joins: {} leaves: {} observers: {} on: {}",
+                      currentView(), joins.size(), view.streamShunned().count(), observersList(), node.getId());
             final var builder = ViewChange.newBuilder()
                                           .setObserver(node.getId().toDigeste())
                                           .setCurrent(currentView().toDigeste())
@@ -593,8 +593,8 @@ public class ViewManagement {
                                                    .setSignature(signature.toSig())
                                                    .build();
             view.initiate(viewChange);
-            log.warn("View change vote: {} joins: {} leaves: {} on: {}", currentView(), change.getJoinsCount(),
-                     change.getLeavesCount(), node.getId());
+            log.trace("View change vote: {} joins: {} leaves: {} on: {}", currentView(), change.getJoinsCount(),
+                      change.getLeavesCount(), node.getId());
         });
     }
 

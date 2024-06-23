@@ -344,16 +344,18 @@ public class View {
             return;
         }
         viewChange(() -> {
+            final var current = currentView();
             final var supermajority = context.getRingCount() * 3 / 4;
             final var majority = context.size() == 1 ? 1 : supermajority;
             final var valid = observations.values()
                                           .stream()
+                                          .filter(vc -> current.equals(Digest.from(vc.getChange().getCurrent())))
                                           .filter(svc -> viewManagement.observers.contains(
                                           Digest.from(svc.getChange().getObserver())))
                                           .toList();
-            log.info("Finalize view change, observations: {} valid: {} observers: {} on: {}",
-                     observations.values().stream().map(sv -> Digest.from(sv.getChange().getObserver())).toList(),
-                     valid.size(), viewManagement.observersList(), node.getId());
+            log.trace("Finalize view change, observations: {} valid: {} observers: {} on: {}",
+                      observations.values().stream().map(sv -> Digest.from(sv.getChange().getObserver())).toList(),
+                      valid.size(), viewManagement.observersList(), node.getId());
             observations.clear();
             if (valid.size() < majority) {
                 log.info("Do not have majority: {} required: {} observers: {} for: {} on: {}", valid.size(), majority,
@@ -364,8 +366,7 @@ public class View {
             log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(), majority,
                      viewManagement.observersList(), currentView(), node.getId());
             HashMultiset<Ballot> ballots = HashMultiset.create();
-            final var current = currentView();
-            valid.stream().filter(vc -> current.equals(Digest.from(vc.getChange().getCurrent()))).forEach(vc -> {
+            valid.forEach(vc -> {
                 final var leaving = vc.getChange()
                                       .getLeavesList()
                                       .stream()
