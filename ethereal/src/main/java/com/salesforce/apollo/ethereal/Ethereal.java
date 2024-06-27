@@ -73,7 +73,7 @@ public class Ethereal {
     }
 
     private static ThreadPoolExecutor consumer(String label) {
-        return new ThreadPoolExecutor(1, 1, 1, TimeUnit.SECONDS, new PriorityBlockingQueue<>(),
+        return new ThreadPoolExecutor(1, 1, 10, TimeUnit.MINUTES, new PriorityBlockingQueue<>(),
                                       Thread.ofVirtual().name("Ethereal Consumer[" + label + "]").factory(),
                                       (r, t) -> log.trace("Shutdown, cannot consume unit"));
     }
@@ -218,6 +218,7 @@ public class Ethereal {
         }
         log.trace("Stopping Ethereal on: {}", config.logLabel());
         completeIt();
+        consumer.shutdown();
         consumer.getQueue().clear(); // Flush any pending consumers
         creator.stop();
         epochs.values().forEach(epoch::close);

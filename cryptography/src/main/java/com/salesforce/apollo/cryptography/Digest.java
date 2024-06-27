@@ -16,13 +16,15 @@ import java.nio.ByteBuffer;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static com.salesforce.apollo.cryptography.DigestAlgorithm.EMPTY;
+
 /**
  * A computed digest
  *
  * @author hal.hildebrand
  */
 public class Digest implements Comparable<Digest> {
-    public static final Digest          NONE     = new Digest(DigestAlgorithm.NONE, new byte[0]) {
+    public static final Digest          NONE     = new Digest(DigestAlgorithm.NONE, new long[] { 0L }) {
 
         @Override
         public String toString() {
@@ -74,11 +76,15 @@ public class Digest implements Comparable<Digest> {
 
     public Digest(Digeste d) {
         algorithm = DigestAlgorithm.fromDigestCode(d.getType());
-        assert d.getHashCount() == algorithm.longLength();
-        hash = new long[d.getHashCount()];
-        int i = 0;
-        for (long l : d.getHashList()) {
-            hash[i++] = l;
+        if (algorithm.equals(DigestAlgorithm.NONE)) {
+            hash = EMPTY;
+        } else {
+            assert d.getHashCount() == algorithm.longLength();
+            hash = new long[d.getHashCount()];
+            int i = 0;
+            for (long l : d.getHashList()) {
+                hash[i++] = l;
+            }
         }
     }
 

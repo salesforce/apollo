@@ -100,9 +100,11 @@ public class CHOAM {
     private final    TransSubmission                                       txnSubmission         = new TransSubmission();
     private final    AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
     private final    PendingViews                                          pendingViews          = new PendingViews();
+    private final    ScheduledExecutorService                              scheduler;
     private volatile AtomicBoolean                                         ongoingJoin;
 
     public CHOAM(Parameters params) {
+        scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
         this.params = params;
         executions = Executors.newVirtualThreadPerTaskExecutor();
@@ -351,9 +353,17 @@ public class CHOAM {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        session.cancelAll();
         try {
             linear.shutdownNow();
+        } catch (Throwable e) {
+        }
+        try {
+            scheduler.shutdownNow();
+        } catch (Throwable e) {
+        }
+        session.cancelAll();
+        try {
+            session.stop();
         } catch (Throwable e) {
         }
         try {
@@ -1393,31 +1403,28 @@ public class CHOAM {
             var joined = new AtomicInteger();
             var halt = new AtomicBoolean(false);
             ongoingJoin = halt;
-            Thread.ofVirtual().start(Utils.wrapped(() -> {
-                log.trace("Starting join of: {} diadem {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
-                          params.member().getId());
-
-                var scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
-                AtomicReference<Runnable> action = new AtomicReference<>();
-                var attempts = new AtomicInteger();
-                action.set(() -> {
-                    log.trace("Join attempt: {} halt: {} joined: {} majority: {} on: {}", attempts.incrementAndGet(),
-                              halt.get(), joined.get(), view.getMajority(), params.member().getId());
-                    if (!halt.get() & joined.get() < view.getMajority()) {
-                        join(view, servers, joined);
-                        if (joined.get() >= view.getMajority()) {
-                            ongoingJoin = null;
-                            log.trace("Finished join of: {} diadem: {} joins: {} on: {}", nextViewId.get(),
-                                      Digest.from(view.getDiadem()), joined.get(), params.member().getId());
-                        } else if (!halt.get()) {
-                            log.trace("Rescheduling join of: {} diadem: {} joins: {} on: {}", nextViewId.get(),
-                                      Digest.from(view.getDiadem()), joined.get(), params.member().getId());
-                            scheduler.schedule(action.get(), 50, TimeUnit.MILLISECONDS);
-                        }
+            log.trace("Starting join of: {} diadem {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
+                      params.member().getId());
+            var scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+            AtomicReference<Runnable> action = new AtomicReference<>();
+            var attempts = new AtomicInteger();
+            action.set(() -> {
+                log.trace("Join attempt: {} halt: {} joined: {} majority: {} on: {}", attempts.incrementAndGet(),
+                          halt.get(), joined.get(), view.getMajority(), params.member().getId());
+                if (!halt.get() & joined.get() < view.getMajority()) {
+                    join(view, servers, joined);
+                    if (joined.get() >= view.getMajority()) {
+                        ongoingJoin = null;
+                        log.trace("Finished join of: {} diadem: {} joins: {} on: {}", nextViewId.get(),
+                                  Digest.from(view.getDiadem()), joined.get(), params.member().getId());
+                    } else if (!halt.get()) {
+                        log.trace("Rescheduling join of: {} diadem: {} joins: {} on: {}", nextViewId.get(),
+                                  Digest.from(view.getDiadem()), joined.get(), params.member().getId());
+                        scheduler.schedule(action.get(), 50, TimeUnit.MILLISECONDS);
                     }
-                });
-                scheduler.schedule(action.get(), 50, TimeUnit.MILLISECONDS);
-            }, log()));
+                }
+            });
+            scheduler.schedule(action.get(), 50, TimeUnit.MILLISECONDS);
         }
 
         private void join(View view, Collection<Member> members, AtomicInteger joined) {
@@ -1520,7 +1527,7 @@ public class CHOAM {
             var pv = pendingViews();
             producer = new Producer(nextViewId.get(),
                                     new ViewContext(context, params, pv, signer, validators, constructBlock()),
-                                    head.get(), checkpoint.get(), getLabel());
+                                    head.get(), checkpoint.get(), getLabel(), scheduler);
             producer.start();
         }
 
@@ -1575,7 +1582,7 @@ public class CHOAM {
                                           .setVm(inView)
                                           .setSignature(params.member().sign(inView.toByteString()).toSig())
                                           .build();
-                assembly = new GenesisAssembly(vc, comm, svm, getLabel());
+                assembly = new GenesisAssembly(vc, comm, svm, getLabel(), scheduler);
                 log.info("Setting next view id to genesis: {} on: {}", params.genesisViewId(), params.member().getId());
                 nextViewId.set(params.genesisViewId());
             } else {

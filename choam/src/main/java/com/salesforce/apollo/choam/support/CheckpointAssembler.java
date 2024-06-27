@@ -118,7 +118,7 @@ public class CheckpointAssembler {
                  diadem.compactWrapped(), member.getId());
 
         var ringer = new SliceIterator<>("Assembly[%s:%s]".formatted(diadem.compactWrapped(), member.getId()), member,
-                                         committee, comms);
+                                         committee, comms, scheduler);
         ringer.iterate((link) -> {
             log.debug("Requesting Seeding from: {} on: {}", link.getMember().getId(), member.getId());
             return gossip(link);

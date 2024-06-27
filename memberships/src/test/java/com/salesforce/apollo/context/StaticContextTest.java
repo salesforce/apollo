@@ -36,11 +36,11 @@ public class StaticContextTest {
         var context = prototype.asStatic();
 
         var predecessors = context.predecessors(members.get(0).getId());
-        assertEquals(members.get(9), predecessors.get(2));
+        assertEquals(members.get(3), predecessors.get(2));
 
         var successors = context.successors(members.get(1).getId());
-        assertEquals(members.get(0), successors.get(0));
-        assertEquals(members.get(1), context.successor(1, members.get(0).getId()));
+        assertEquals(members.get(8), successors.get(0));
+        assertEquals(members.get(9), context.successor(1, members.get(0).getId()));
     }
 
     @Test

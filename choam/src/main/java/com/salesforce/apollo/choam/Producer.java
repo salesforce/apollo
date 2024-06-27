@@ -52,13 +52,15 @@ public class Producer {
     private final        Transitions                  transitions;
     private final        ViewContext                  view;
     private final        Digest                       nextViewId;
-    private final        Executor                     serialize          = Executors.newSingleThreadExecutor(
-    Thread.ofVirtual().factory());
+    private final        ExecutorService              serialize          = Executors.newSingleThreadExecutor();
     private final        ViewAssembly                 assembly;
     private final        int                          maxEpoch;
+    private final        ScheduledExecutorService     scheduler;
     private volatile     boolean                      assembled          = false;
 
-    public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint, String label) {
+    public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint, String label,
+                    ScheduledExecutorService scheduler) {
+        this.scheduler = scheduler;
         assert view != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
@@ -99,7 +101,7 @@ public class Producer {
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + (8 * 1024), ds, this::serial,
                                   this::newEpoch, label);
         coordinator = new ChRbcGossip(view.context().getId(), params().member(), view.membership(),
-                                      controller.processor(), params().communications(), producerMetrics);
+                                      controller.processor(), params().communications(), producerMetrics, scheduler);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
 
         var onConsensus = new CompletableFuture<ViewAssembly.Vue>();
@@ -148,6 +150,7 @@ public class Producer {
             return;
         }
         log.trace("Closing producer for: {} on: {}", getViewId(), params().member().getId());
+        serialize.shutdown();
         controller.stop();
         coordinator.stop();
         ds.close();

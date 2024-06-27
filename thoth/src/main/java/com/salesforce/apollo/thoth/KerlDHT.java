@@ -146,7 +146,7 @@ public class KerlDHT implements ProtoKERLService {
         this.connectionPool = connectionPool;
         kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
         this.reconcile = new RingCommunications<>(this.context, member, reconcileComms);
-        this.kerlSpace = new KerlSpace(connectionPool, member.getId());
+        this.kerlSpace = new KerlSpace(connectionPool, member.getId(), digestAlgorithm);
 
         initializeSchema();
         kerl = new CachingKERL(f -> {

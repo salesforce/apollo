@@ -109,6 +109,7 @@ public class View {
     private final    ViewManagement                              viewManagement;
     private final    EventValidation                             validation;
     private final    Verifiers                                   verifiers;
+    private final    ScheduledExecutorService                    scheduler;
     private volatile ScheduledFuture<?>                          futureGossip;
     private volatile boolean                                     boostrap            = false;
 
@@ -122,13 +123,14 @@ public class View {
     public View(DynamicContext<Participant> context, ControlledIdentifierMember member, String endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
                 Router gateway, DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
+        scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         this.metrics = metrics;
         this.params = params;
         this.digestAlgo = digestAlgo;
         this.context = context;
         this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
         this.node = new Node(member, endpoint);
-        viewManagement = new ViewManagement(this, context, params, metrics, node, digestAlgo);
+        viewManagement = new ViewManagement(this, context, params, metrics, node, digestAlgo, scheduler);
         var service = new Service();
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new FfServer(communications.getClientIdentityProvider(), r, metrics),
@@ -217,12 +219,10 @@ public class View {
         context.clear();
         node.reset();
 
-        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        var initial = Entropy.nextBitsStreamLong(d.toNanos());
-        scheduler.schedule(() -> Thread.ofVirtual()
-                                       .start(Utils.wrapped(
-                                       () -> new Binding(this, seeds, d, context, approaches, node, params, metrics,
-                                                         digestAlgo).seeding(), log)), initial, TimeUnit.NANOSECONDS);
+        Thread.ofVirtual()
+              .start(Utils.wrapped(
+              () -> new Binding(this, seeds, d, context, approaches, node, params, metrics, digestAlgo,
+                                scheduler).seeding(), log));
 
         log.info("{} started on: {}", context.getId(), node.getId());
     }
@@ -247,6 +247,7 @@ public class View {
         comm.deregister(context.getId());
         pendingRebuttals.clear();
         context.active().forEach(context::offline);
+        scheduler.shutdown();
         final var current = futureGossip;
         futureGossip = null;
         if (current != null) {
@@ -494,10 +495,7 @@ public class View {
     }
 
     void schedule(final Duration duration) {
-        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        futureGossip = scheduler.schedule(
-        () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(duration, scheduler), log)),
-        Entropy.nextBitsStreamLong(duration.toNanos()), TimeUnit.NANOSECONDS);
+        Thread.ofVirtual().start(Utils.wrapped(() -> gossip(duration), log));
     }
 
     void scheduleClearObservations() {
@@ -1046,9 +1044,8 @@ public class View {
      * Execute one round of gossip
      *
      * @param duration
-     * @param scheduler
      */
-    private void gossip(Duration duration, ScheduledExecutorService scheduler) {
+    private void gossip(Duration duration) {
         if (!started.get()) {
             return;
         }
@@ -1057,7 +1054,7 @@ public class View {
             tick();
         }
         gossiper.execute((link, ring) -> gossip(link, ring),
-                         (result, destination) -> gossip(result, destination, duration, scheduler));
+                         (result, destination) -> gossip(result, destination, duration));
     }
 
     /**
@@ -1066,10 +1063,9 @@ public class View {
      * @param result
      * @param destination
      * @param duration
-     * @param scheduler
      */
     private void gossip(Optional<Gossip> result, RingCommunications.Destination<Participant, Fireflies> destination,
-                        Duration duration, ScheduledExecutorService scheduler) {
+                        Duration duration) {
         try {
             if (result.isPresent()) {
                 final var member = destination.member();
@@ -1115,9 +1111,13 @@ public class View {
             }
 
         } finally {
-            futureGossip = scheduler.schedule(
-            () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(duration, scheduler), log)), duration.toNanos(),
-            TimeUnit.NANOSECONDS);
+            try {
+                futureGossip = scheduler.schedule(
+                () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(duration), log)), duration.toNanos(),
+                TimeUnit.NANOSECONDS);
+            } catch (RejectedExecutionException e) {
+                // ignore
+            }
         }
     }
 

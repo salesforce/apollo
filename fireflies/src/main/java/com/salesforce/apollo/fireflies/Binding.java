@@ -58,10 +58,12 @@ class Binding {
     private final        Parameters                              params;
     private final        List<Seed>                              seeds;
     private final        View                                    view;
+    private final        ScheduledExecutorService                scheduler;
 
     public Binding(View view, List<Seed> seeds, Duration duration, DynamicContext<Participant> context,
                    CommonCommunications<Entrance, Service> approaches, Node node, Parameters params,
-                   FireflyMetrics metrics, DigestAlgorithm digestAlgo) {
+                   FireflyMetrics metrics, DigestAlgorithm digestAlgo, ScheduledExecutorService scheduler) {
+        this.scheduler = scheduler;
         assert node != null;
         this.view = view;
         this.duration = duration;
@@ -98,7 +100,7 @@ class Binding {
                                  .map(nw -> view.new Participant(nw))
                                  .filter(p -> !node.getId().equals(p.getId()))
                                  .collect(Collectors.toList());
-        var seedlings = new SliceIterator<>("Seedlings", node, bootstrappers, approaches);
+        var seedlings = new SliceIterator<>("Seedlings", node, bootstrappers, approaches, scheduler);
         AtomicReference<Runnable> reseed = new AtomicReference<>();
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         reseed.set(() -> {
@@ -110,6 +112,8 @@ class Binding {
                 if (!redirect.isDone()) {
                     scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(reseed.get(), log)),
                                        params.retryDelay().toNanos(), TimeUnit.NANOSECONDS);
+                } else {
+                    scheduler.shutdown();
                 }
             }, params.retryDelay());
         });
@@ -141,7 +145,7 @@ class Binding {
     }
 
     private void complete(Member member, CompletableFuture<Bound> gateway, HashMultiset<Bootstrapping> trusts,
-                          Set<SignedNote> initialSeedSet, Digest v, int majority, CompletableFuture<Boolean> complete,
+                          Set<SignedNote> iss, Digest v, int majority, CompletableFuture<Boolean> complete,
                           AtomicInteger remaining, ListenableFuture<Gateway> futureSailor) {
         if (complete.isDone()) {
             return;
@@ -182,6 +186,7 @@ class Binding {
             return;
         }
         trusts.add(new Bootstrapping(g.getTrust()));
+        var initialSeedSet = new HashSet<>(iss);
         initialSeedSet.addAll(g.getInitialSeedSetList());
         log.trace("Initial seed set count: {} view: {} from: {} on: {}", g.getInitialSeedSetCount(), v, member.getId(),
                   node.getId());
@@ -322,7 +327,7 @@ class Binding {
         this.context.rebalance(cardinality);
         node.nextNote(v);
 
-        final var redirecting = new SliceIterator<>("Gateways", node, sample, approaches);
+        final var redirecting = new SliceIterator<>("Gateways", node, sample, approaches, scheduler);
         var majority = redirect.getBootstrap() ? 1 : Context.minimalQuorum(redirect.getRings(), this.context.getBias());
         final var join = join(v);
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
@@ -336,9 +341,11 @@ class Binding {
             complete.whenComplete((success, error) -> {
                 if (error != null) {
                     log.info("Failed Join on: {}", node.getId(), error);
+                    scheduler.shutdown();
                     return;
                 }
                 if (success) {
+                    scheduler.shutdown();
                     return;
                 }
                 log.info("Join unsuccessful, abandoned: {} trusts: {} on: {}", abandon.get(), trusts.entrySet()
@@ -359,6 +366,7 @@ class Binding {
                     scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(regate.get(), log)),
                                        Entropy.nextBitsStreamLong(params.retryDelay().toNanos()), TimeUnit.NANOSECONDS);
                 } else {
+                    scheduler.shutdown();
                     log.error("Failed to join view: {} cannot obtain majority Gateway on: {}", view, node.getId());
                     view.stop();
                 }
@@ -375,6 +383,7 @@ class Binding {
                                         log.debug(
                                         "Abandoning Gateway view: {} abandons: {} majority: {} reseeding on: {}", v,
                                         abandon.get(), majority, node.getId());
+                                        scheduler.shutdown();
                                         complete.completeExceptionally(new TimeoutException("Failed Join"));
                                         seeding();
                                     }

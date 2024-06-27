@@ -15,7 +15,6 @@ import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.fireflies.Binding.Bound;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.View.Participant;
-import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.membership.Member;
@@ -63,17 +62,19 @@ public class ViewManagement {
     private final    AtomicReference<ViewChange>                   vote         = new AtomicReference<>();
     private final    Lock                                          joinLock     = new ReentrantLock();
     private final    AtomicReference<Digest>                       currentView  = new AtomicReference<>();
+    private final    ScheduledExecutorService                      scheduler;
     private volatile boolean                                       bootstrap;
     private volatile CompletableFuture<Void>                       onJoined;
 
     ViewManagement(View view, DynamicContext<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
-                   DigestAlgorithm digestAlgo) {
+                   DigestAlgorithm digestAlgo, ScheduledExecutorService scheduler) {
         this.node = node;
         this.view = view;
         this.context = context;
         this.params = params;
         this.metrics = metrics;
         this.digestAlgo = digestAlgo;
+        this.scheduler = scheduler;
         resetBootstrapView();
         bootstrapView = currentView.get();
     }
@@ -400,7 +401,8 @@ public class ViewManagement {
             log.debug("Member pending join: {} view: {} context: {} on: {}", from, currentView(), context.getId(),
                       node.getId());
             var enjoining = new SliceIterator<>("Enjoining[%s:%s]".formatted(currentView(), from), node,
-                                                observers.stream().map(context::getActiveMember).toList(), view.comm);
+                                                observers.stream().map(context::getActiveMember).toList(), view.comm,
+                                                scheduler);
             enjoining.iterate(t -> t.enjoin(join), (_, _, _, _) -> true, () -> {
             }, Duration.ofMillis(1));
         });
@@ -495,29 +497,6 @@ public class ViewManagement {
 
     List<Digest> observersList() {
         return observers().stream().toList();
-    }
-
-    void populate(List<Participant> sample) {
-        var populate = new SliceIterator<Fireflies>("Populate: " + context.getId(), node, sample, view.comm);
-        var repopulate = new AtomicReference<Runnable>();
-        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        repopulate.set(() -> populate.iterate((link) -> view.gossip(link, 0), (futureSailor, _, link, m) -> {
-            futureSailor.ifPresent(g -> {
-                if (!g.getRedirect().equals(SignedNote.getDefaultInstance())) {
-                    final Participant member = (Participant) link.getMember();
-                    view.stable(() -> view.redirect(member, g, 0));
-                } else {
-                    view.stable(() -> view.processUpdates(g));
-                }
-            });
-            return !joined();
-        }, () -> {
-            if (!joined()) {
-                scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(repopulate.get(), log)),
-                                   params.populateDuration().toNanos(), TimeUnit.NANOSECONDS);
-            }
-        }, params.populateDuration()));
-        repopulate.get().run();
     }
 
     JoinGossip.Builder processJoins(BloomFilter<Digest> bff) {

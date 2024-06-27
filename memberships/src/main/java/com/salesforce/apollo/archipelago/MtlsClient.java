@@ -19,11 +19,15 @@ import io.netty.channel.ChannelOption;
 import io.netty.handler.ssl.ClientAuth;
 
 import java.net.SocketAddress;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 /**
  * @author hal.hildebrand
  */
 public class MtlsClient {
+
+    private final static Executor executor = Executors.newVirtualThreadPerTaskExecutor();
 
     private final ManagedChannel channel;
 
@@ -32,6 +36,7 @@ public class MtlsClient {
 
         Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().blockOnLimit(false).build();
         channel = NettyChannelBuilder.forAddress(address)
+                                     //                                     .executor(executor)
                                      .withOption(ChannelOption.TCP_NODELAY, true)
                                      .sslContext(supplier.forClient(clientAuth, alias, validator, MtlsServer.TL_SV1_3))
                                      .intercept(new ConcurrencyLimitClientInterceptor(limiter,

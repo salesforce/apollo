@@ -60,7 +60,7 @@ public class ChRbcGossip {
     private volatile     ScheduledFuture<?>                              scheduled;
 
     public ChRbcGossip(Digest id, SigningMember member, Collection<Member> membership, Processor processor,
-                       Router communications, EtherealMetrics m) {
+                       Router communications, EtherealMetrics m, ScheduledExecutorService scheduler) {
         this.processor = processor;
         this.member = member;
         this.metrics = m;
@@ -68,7 +68,8 @@ public class ChRbcGossip {
         comm = communications.create(member, id, terminal, getClass().getCanonicalName(),
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
-        ring = new SliceIterator<>("ChRbcGossip[%s on: %s]".formatted(id, member.getId()), member, membership, comm);
+        ring = new SliceIterator<>("ChRbcGossip[%s on: %s]".formatted(id, member.getId()), member, membership, comm,
+                                   scheduler);
     }
 
     /**

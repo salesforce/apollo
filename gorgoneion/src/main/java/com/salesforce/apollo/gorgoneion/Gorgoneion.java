@@ -51,9 +51,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.*;
 import java.util.function.Predicate;
 
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
@@ -73,6 +71,7 @@ public class Gorgoneion {
     private final Parameters                                            parameters;
     private final Predicate<SignedAttestation>                          verifier;
     private final boolean                                               bootstrap;
+    private final ScheduledExecutorService                              scheduler;
 
     public Gorgoneion(boolean bootstrap, Predicate<SignedAttestation> verifier, Parameters parameters,
                       ControlledIdentifierMember member, Context<Member> context, ProtoEventObserver observer,
@@ -89,6 +88,7 @@ public class Gorgoneion {
         this.context = context;
         this.parameters = parameters;
         this.observer = observer;
+        this.scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
 
         admissionsComm = admissionsRouter.create(member, context.getId(), new Admit(), ":admissions",
                                                  r -> new AdmissionsServer(admissionsRouter.getClientIdentityProvider(),
@@ -159,7 +159,8 @@ public class Gorgoneion {
         var successors = context.size() == 1 ? Collections.singletonList(member)
                                              : context.bftSubset(digestOf(ident, parameters.digestAlgorithm()));
         final var majority = context.size() == 1 ? 1 : context.majority();
-        final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm);
+        final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm,
+                                                    scheduler);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
         var generated = new CompletableFuture<SignedNonce>();
         redirecting.iterate((link) -> {
@@ -221,7 +222,8 @@ public class Gorgoneion {
 
         var successors = context.bftSubset(digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.size() == 1 ? 1 : context.majority();
-        SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
+        SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm,
+                                                                     scheduler);
         var completed = new HashSet<Member>();
         var result = new CompletableFuture<Validations>();
         redirecting.iterate((link) -> {
@@ -253,7 +255,8 @@ public class Gorgoneion {
 
         var successors = context.bftSubset(digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.size() == 1 ? 1 : context.majority();
-        final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm);
+        final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm,
+                                                    scheduler);
         var verifications = new HashSet<Validation_>();
         redirecting.iterate((link) -> {
             log.debug("Validating  credentials for: {} contacting: {} on: {}", identifier, link.getMember().getId(),

@@ -117,6 +117,10 @@ public class Session {
         }
     }
 
+    public void stop() {
+        scheduler.shutdown();
+    }
+
     /**
      * Submit a transaction.
      *
