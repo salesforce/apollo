@@ -173,10 +173,10 @@ public class Creator {
     private ByteString getData(int level) {
         if (level < conf.lastLevel()) {
             if (ds != null) {
-                log.info("Requesting timing unit: {} on: {}", level, conf.logLabel());
+                log.trace("Requesting timing unit: {} on: {}", level, conf.logLabel());
                 return ds.getData();
             }
-            log.info("No datasource for timing unit: {} on: {}", level, conf.logLabel());
+            log.trace("No datasource for timing unit: {} on: {}", level, conf.logLabel());
             return ByteString.EMPTY;
         }
         Unit timingUnit = lastTiming.poll();

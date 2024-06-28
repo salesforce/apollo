@@ -81,12 +81,10 @@ public class CHOAM {
     private final    ReliableBroadcaster                                   combine;
     private final    CommonCommunications<Terminal, Concierge>             comm;
     private final    AtomicReference<Committee>                            current               = new AtomicReference<>();
-    private final    ExecutorService                                       executions;
     private final    AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
     private final    AtomicReference<ScheduledFuture<?>>                   futureSynchronization = new AtomicReference<>();
     private final    AtomicReference<HashedCertifiedBlock>                 genesis               = new AtomicReference<>();
     private final    AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
-    private final    ExecutorService                                       linear;
     private final    AtomicReference<nextView>                             next                  = new AtomicReference<>();
     private final    AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
     private final    Parameters                                            params;
@@ -101,13 +99,13 @@ public class CHOAM {
     private final    AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
     private final    PendingViews                                          pendingViews          = new PendingViews();
     private final    ScheduledExecutorService                              scheduler;
+    private final    Semaphore                                             linear                = new Semaphore(1);
     private volatile AtomicBoolean                                         ongoingJoin;
 
     public CHOAM(Parameters params) {
         scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
         this.params = params;
-        executions = Executors.newVirtualThreadPerTaskExecutor();
         pendingViews.add(params.context().getId(), params.context().delegate());
 
         rotateViewKeys();
@@ -118,14 +116,17 @@ public class CHOAM {
         combine = new ReliableBroadcaster(bContext, params.member(), params.combine(), params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics(),
                                           adapter);
-        linear = Executors.newSingleThreadExecutor(
-        Thread.ofVirtual().name("Linear " + params.member().getId()).factory());
         combine.registerHandler((_, messages) -> {
-            try {
-                linear.execute(Utils.wrapped(() -> combine(messages), log));
-            } catch (RejectedExecutionException e) {
-                // ignore
-            }
+            Thread.ofVirtual().start(() -> {
+                if (!started.get()) {
+                    return;
+                }
+                try {
+                    combine(messages);
+                } catch (Throwable t) {
+                    log.error("Failed to combine messages on: {}", params.member().getId(), t);
+                }
+            });
         });
         head.set(new NullBlock(params.digestAlgorithm()));
         view.set(new NullBlock(params.digestAlgorithm()));
@@ -353,10 +354,7 @@ public class CHOAM {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        try {
-            linear.shutdownNow();
-        } catch (Throwable e) {
-        }
+        linear.release(10000);
         try {
             scheduler.shutdownNow();
         } catch (Throwable e) {
@@ -364,10 +362,6 @@ public class CHOAM {
         session.cancelAll();
         try {
             session.stop();
-        } catch (Throwable e) {
-        }
-        try {
-            executions.shutdownNow();
         } catch (Throwable e) {
         }
         final var c = current.get();
@@ -593,7 +587,7 @@ public class CHOAM {
             try {
                 params.processor()
                       .execute(index, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
-                               stxn == null ? null : stxn.onCompletion(), executions);
+                               stxn == null ? null : stxn.onCompletion());
             } catch (Throwable t) {
                 log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash, h.height(),
                           params.member().getId());
@@ -951,14 +945,13 @@ public class CHOAM {
         log.info("Synchronized, resuming view: {} deferred blocks: {} on: {}",
                  state.lastCheckpoint() != null ? state.lastCheckpoint().hash : state.genesis().hash, pending.size(),
                  params.member().getId());
-        try {
-            linear.execute(Utils.wrapped(() -> {
-                transitions.synchd();
-                transitions.combine();
-            }, log));
-        } catch (RejectedExecutionException e) {
-            // ignore
-        }
+        Thread.ofVirtual().start(Utils.wrapped(() -> {
+            if (!started.get()) {
+                return;
+            }
+            transitions.synchd();
+            transitions.combine();
+        }, log));
     }
 
     private void synchronizedProcess(CertifiedBlock certifiedBlock) {
@@ -1052,7 +1045,7 @@ public class CHOAM {
         }
 
         @SuppressWarnings("rawtypes")
-        void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete, Executor executor);
+        void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete);
 
         default void genesis(Digest hash, List<Transaction> initialization) {
         }
@@ -1209,7 +1202,25 @@ public class CHOAM {
 
         @Override
         public void combine() {
-            CHOAM.this.combine();
+            Thread.ofVirtual().start(Utils.wrapped(() -> {
+                if (!started.get()) {
+                    return;
+                }
+                try {
+                    linear.acquire();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                try {
+                    CHOAM.this.combine();
+                } finally {
+                    linear.release();
+                }
+            }, log));
+            if (linear.getQueueLength() > 0) {
+                log.info("Linear Q: {} on: {}", linear.getQueueLength(), params.member().getId());
+            }
         }
 
         @Override

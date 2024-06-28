@@ -183,9 +183,9 @@ public class MembershipTests {
     }
 
     private CHOAM constructCHOAM(SigningMember m, Parameters.Builder params, boolean testSubject) {
-        final TransactionExecutor processor = (index, hash, t, f, executor) -> {
+        final TransactionExecutor processor = (_, _, _, f) -> {
             if (f != null) {
-                f.completeAsync(Object::new, executor);
+                f.completeAsync(Object::new);
             }
         };
         params.getProducer().ethereal().setSigner(m);

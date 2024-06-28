@@ -108,6 +108,12 @@ public class ViewAssembly {
 
     void assemble(List<Assemblies> asses) {
         if (!started.get()) {
+            if (!asses.isEmpty()) {
+                var viewz = asses.stream().flatMap(a -> a.getViewsList().stream()).toList();
+                var joinz = asses.stream().flatMap(a -> a.getJoinsList().stream()).toList();
+                log.debug("Not started, ignoring assemblies: {} joins: {} views: {} on: {}", asses.size(), joinz.size(),
+                          viewz.size(), params().member().getId());
+            }
             return;
         }
 

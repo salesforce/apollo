@@ -93,7 +93,8 @@ public class FireFliesTest {
             var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofSeconds(5),
                                                                      "jdbc:h2:mem:%s-state".formatted(digest),
                                                                      checkpointDirBase, Duration.ofMillis(10), 0.00125,
-                                                                     Duration.ofSeconds(5), 3, 10, 0.1);
+                                                                     Duration.ofSeconds(5), 3, Duration.ofMillis(100),
+                                                                     10, 0.1);
             var node = new ProcessDomain(group, member, pdParams, params.clone(), RuntimeParameters.newBuilder()
                                                                                                    .setFoundation(
                                                                                                    sealed)

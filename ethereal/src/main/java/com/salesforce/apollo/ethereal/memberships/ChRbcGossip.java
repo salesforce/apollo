@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -46,18 +45,18 @@ import static com.salesforce.apollo.ethereal.memberships.comm.GossiperClient.get
  * @author hal.hildebrand
  */
 public class ChRbcGossip {
+    private static final Logger log = LoggerFactory.getLogger(ChRbcGossip.class);
 
-    private static final Logger                                          log      = LoggerFactory.getLogger(
-    ChRbcGossip.class);
-    private final        CommonCommunications<Gossiper, GossiperService> comm;
-    private final        Digest                                          id;
-    private final        SigningMember                                   member;
-    private final        EtherealMetrics                                 metrics;
-    private final        Processor                                       processor;
-    private final        SliceIterator<Gossiper>                         ring;
-    private final        AtomicBoolean                                   started  = new AtomicBoolean();
-    private final        Terminal                                        terminal = new Terminal();
-    private volatile     ScheduledFuture<?>                              scheduled;
+    private final    CommonCommunications<Gossiper, GossiperService> comm;
+    private final    Digest                                          id;
+    private final    SigningMember                                   member;
+    private final    EtherealMetrics                                 metrics;
+    private final    Processor                                       processor;
+    private final    SliceIterator<Gossiper>                         ring;
+    private final    AtomicBoolean                                   started  = new AtomicBoolean();
+    private final    Terminal                                        terminal = new Terminal();
+    private final    ScheduledExecutorService                        scheduler;
+    private volatile ScheduledFuture<?>                              scheduled;
 
     public ChRbcGossip(Digest id, SigningMember member, Collection<Member> membership, Processor processor,
                        Router communications, EtherealMetrics m, ScheduledExecutorService scheduler) {
@@ -65,6 +64,7 @@ public class ChRbcGossip {
         this.member = member;
         this.metrics = m;
         this.id = id;
+        this.scheduler = scheduler;
         comm = communications.create(member, id, terminal, getClass().getCanonicalName(),
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
@@ -90,7 +90,6 @@ public class ChRbcGossip {
         log.trace("Starting GossipService[{}] on: {}", id, member.getId());
         comm.register(id, terminal, validator);
         try {
-            var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
             scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> {
                 try {
                     gossip(duration, scheduler);

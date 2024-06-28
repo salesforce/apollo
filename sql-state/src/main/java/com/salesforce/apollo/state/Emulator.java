@@ -92,8 +92,7 @@ public class Emulator {
             lock.lock();
             try {
                 Transaction txn = st.transaction();
-                txnExec.execute(txnIndex.incrementAndGet(), CHOAM.hashOf(txn, algorithm), txn, st.onCompletion(),
-                                r -> r.run());
+                txnExec.execute(txnIndex.incrementAndGet(), CHOAM.hashOf(txn, algorithm), txn, st.onCompletion());
                 return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
             } finally {
                 lock.unlock();

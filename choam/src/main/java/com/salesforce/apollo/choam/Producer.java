@@ -52,15 +52,13 @@ public class Producer {
     private final        Transitions                  transitions;
     private final        ViewContext                  view;
     private final        Digest                       nextViewId;
-    private final        ExecutorService              serialize          = Executors.newSingleThreadExecutor();
+    private final        Semaphore                    serialize          = new Semaphore(1);
     private final        ViewAssembly                 assembly;
     private final        int                          maxEpoch;
-    private final        ScheduledExecutorService     scheduler;
     private volatile     boolean                      assembled          = false;
 
     public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint, String label,
                     ScheduledExecutorService scheduler) {
-        this.scheduler = scheduler;
         assert view != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
@@ -150,7 +148,7 @@ public class Producer {
             return;
         }
         log.trace("Closing producer for: {} on: {}", getViewId(), params().member().getId());
-        serialize.shutdown();
+        serialize.release(10000);
         controller.stop();
         coordinator.stop();
         ds.close();
@@ -353,13 +351,20 @@ public class Producer {
     }
 
     private void serial(List<ByteString> preblock, Boolean last) {
-        serialize.execute(() -> {
+        Thread.ofVirtual().start(() -> {
             try {
+                serialize.acquire();
                 create(preblock, last);
             } catch (Throwable t) {
                 log.error("Error processing preblock last: {} on: {}", last, params().member().getId(), t);
+            } finally {
+                serialize.release();
             }
         });
+        var awaiting = serialize.getQueueLength();
+        if (awaiting > 0) {
+            log.error("Serialize: {} on: {}", awaiting, params().member().getId());
+        }
     }
 
     private PendingBlock validate(Validate v) {
