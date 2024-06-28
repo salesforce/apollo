@@ -40,19 +40,18 @@ import java.util.function.Supplier;
  */
 public class Session {
 
-    private final static Logger                                       log       = LoggerFactory.getLogger(
-    Session.class);
-    private final        Limiter<Void>                                limiter;
-    private final        Parameters                                   params;
-    private final        Function<SubmittedTransaction, SubmitResult> service;
-    private final        Map<Digest, SubmittedTransaction>            submitted = new ConcurrentHashMap<>();
-    private final        AtomicReference<HashedCertifiedBlock>        view      = new AtomicReference<>();
-    private final        ScheduledExecutorService                     scheduler = Executors.newScheduledThreadPool(1,
-                                                                                                                   Thread.ofVirtual()
-                                                                                                                         .factory());
-    private final        AtomicInteger                                nonce     = new AtomicInteger();
+    private final static Logger log = LoggerFactory.getLogger(Session.class);
 
-    public Session(Parameters params, Function<SubmittedTransaction, SubmitResult> service) {
+    private final Limiter<Void>                                limiter;
+    private final Parameters                                   params;
+    private final Function<SubmittedTransaction, SubmitResult> service;
+    private final Map<Digest, SubmittedTransaction>            submitted = new ConcurrentHashMap<>();
+    private final AtomicReference<HashedCertifiedBlock>        view      = new AtomicReference<>();
+    private final ScheduledExecutorService                     scheduler;
+    private final AtomicInteger                                nonce     = new AtomicInteger();
+
+    public Session(Parameters params, Function<SubmittedTransaction, SubmitResult> service,
+                   ScheduledExecutorService scheduler) {
         this.params = params;
         this.service = service;
         final var metrics = params.metrics();
@@ -60,6 +59,7 @@ public class Session {
                              .build(params.member().getId().shortString(),
                                     metrics == null ? EmptyMetricRegistry.INSTANCE : metrics.getMetricRegistry(
                                     params.context().getId().shortString() + ".txnLimiter"));
+        this.scheduler = scheduler;
     }
 
     public static Transaction transactionOf(Digest source, int nonce, Message message, Signer signer) {
@@ -115,10 +115,6 @@ public class Session {
                 it.remove();
             }
         }
-    }
-
-    public void stop() {
-        scheduler.shutdown();
     }
 
     /**

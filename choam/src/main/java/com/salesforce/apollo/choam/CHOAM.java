@@ -150,7 +150,7 @@ public class CHOAM {
         roundScheduler = new RoundScheduler("CHOAM" + params.member().getId() + params.context().getId(),
                                             params.context().timeToLive());
         combine.register(_ -> roundScheduler.tick());
-        session = new Session(params, service());
+        session = new Session(params, service(), scheduler);
     }
 
     public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize, Digest initial, int crowns,
@@ -360,10 +360,6 @@ public class CHOAM {
         } catch (Throwable e) {
         }
         session.cancelAll();
-        try {
-            session.stop();
-        } catch (Throwable e) {
-        }
         final var c = current.get();
         if (c != null) {
             try {
@@ -760,7 +756,8 @@ public class CHOAM {
         log.info("Recovering from: {} height: {} on: {}", anchor.hash, anchor.height(), params.member().getId());
         cancelSynchronization();
         cancelBootstrap();
-        futureBootstrap.set(new Bootstrapper(anchor, params, store, comm).synchronize().whenComplete((s, t) -> {
+        futureBootstrap.set(
+        new Bootstrapper(anchor, params, store, comm, scheduler).synchronize().whenComplete((s, t) -> {
             if (t == null) {
                 try {
                     synchronize(s);

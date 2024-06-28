@@ -198,7 +198,7 @@ public class ReliableBroadcaster {
         var initialDelay = Entropy.nextBitsStreamLong(duration.toMillis());
         log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         comm.register(context.getId(), new Service(), validator);
-        var scheduler = Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory());
+        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(duration, scheduler), log)),
                            initialDelay, TimeUnit.MILLISECONDS);
     }

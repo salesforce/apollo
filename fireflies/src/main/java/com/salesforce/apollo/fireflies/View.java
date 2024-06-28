@@ -96,7 +96,7 @@ public class View {
     private final    RingCommunications<Participant, Fireflies>  gossiper;
     private final    AtomicBoolean                               introduced          = new AtomicBoolean();
     private final    Map<String, Consumer<ViewChange>>           viewChangeListeners = new HashMap<>();
-    private final    Executor                                    viewNotificationQueue;
+    private final    Semaphore                                   viewSerialization   = new Semaphore(1);
     private final    FireflyMetrics                              metrics;
     private final    Node                                        node;
     private final    Map<Digest, SVU>                            observations        = new ConcurrentSkipListMap<>();
@@ -111,7 +111,6 @@ public class View {
     private final    Verifiers                                   verifiers;
     private final    ScheduledExecutorService                    scheduler;
     private volatile ScheduledFuture<?>                          futureGossip;
-    private volatile boolean                                     boostrap            = false;
 
     public View(DynamicContext<Participant> context, ControlledIdentifierMember member, String endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
@@ -144,7 +143,6 @@ public class View {
         gossiper.ignoreSelf();
         this.validation = validation;
         this.verifiers = verifiers;
-        viewNotificationQueue = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         viewChange = new ReentrantReadWriteLock(true);
     }
 
@@ -243,6 +241,7 @@ public class View {
         if (!started.compareAndSet(true, false)) {
             return;
         }
+        viewSerialization.release(10000);
         roundTimers.reset();
         comm.deregister(context.getId());
         pendingRebuttals.clear();
@@ -328,7 +327,6 @@ public class View {
     }
 
     void bootstrap(NoteWrapper nw, Duration dur) {
-        boostrap = true;
         viewManagement.bootstrap(nw, dur);
     }
 
@@ -415,13 +413,24 @@ public class View {
                                               joining.stream().map(SelfAddressingIdentifier::getDigest).toList(),
                                               Collections.unmodifiableList(leaving));
         viewChangeListeners.forEach((key, value) -> {
-            viewNotificationQueue.execute(Utils.wrapped(() -> {
+            Thread.ofVirtual().start(Utils.wrapped(() -> {
+                try {
+                    viewSerialization.acquire();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                if (!started.get()) {
+                    return;
+                }
                 try {
                     log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", key,
                               currentView(), context.size(), joining.size(), leaving.size(), node.getId());
                     value.accept(viewChange);
                 } catch (Throwable e) {
                     log.error("error in view change listener: {} on: {} ", key, node.getId(), e);
+                } finally {
+                    viewSerialization.release();
                 }
             }, log));
         });

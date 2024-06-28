@@ -34,6 +34,8 @@ import java.security.SecureRandom;
 import java.sql.Connection;
 import java.util.Arrays;
 import java.util.Properties;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -47,15 +49,16 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class Emulator {
 
-    private final AtomicReference<Digest> hash;
-    private final AtomicLong              height   = new AtomicLong(0);
-    private final ReentrantLock           lock     = new ReentrantLock();
-    private final Mutator                 mutator;
-    private final Parameters              params;
-    private final SqlStateMachine         ssm;
-    private final AtomicBoolean           started  = new AtomicBoolean();
-    private final TransactionExecutor     txnExec;
-    private final AtomicInteger           txnIndex = new AtomicInteger(0);
+    private final AtomicReference<Digest>  hash;
+    private final AtomicLong               height   = new AtomicLong(0);
+    private final ReentrantLock            lock     = new ReentrantLock();
+    private final Mutator                  mutator;
+    private final Parameters               params;
+    private final SqlStateMachine          ssm;
+    private final AtomicBoolean            started  = new AtomicBoolean();
+    private final TransactionExecutor      txnExec;
+    private final AtomicInteger            txnIndex = new AtomicInteger(0);
+    private final ScheduledExecutorService scheduler;
 
     public Emulator() throws IOException {
         this(DigestAlgorithm.DEFAULT.getOrigin().prefix(Entropy.nextBitsStreamLong()));
@@ -64,11 +67,13 @@ public class Emulator {
     public Emulator(Digest base) throws IOException {
         this(new SqlStateMachine(DigestAlgorithm.DEFAULT.getOrigin(),
                                  String.format("jdbc:h2:mem:emulation-%s-%s", base, Entropy.nextBitsStreamLong()),
-                                 new Properties(), Files.createTempDirectory("emulation").toFile()), base);
+                                 new Properties(), Files.createTempDirectory("emulation").toFile()), base,
+             Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
     }
 
-    public Emulator(SqlStateMachine ssm, Digest base) {
+    public Emulator(SqlStateMachine ssm, Digest base, ScheduledExecutorService scheduler) throws IOException {
         this.ssm = ssm;
+        this.scheduler = scheduler;
         txnExec = this.ssm.getExecutor();
         hash = new AtomicReference<>(base);
         SecureRandom entropy;
@@ -97,7 +102,7 @@ public class Emulator {
             } finally {
                 lock.unlock();
             }
-        });
+        }, scheduler);
         session.setView(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, CertifiedBlock.newBuilder()
                                                                                         .setBlock(Block.newBuilder()
                                                                                                        .setHeader(

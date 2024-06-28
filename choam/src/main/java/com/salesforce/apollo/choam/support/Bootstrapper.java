@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -60,11 +59,12 @@ public class Bootstrapper {
     private volatile HashedCertifiedBlock                      genesis;
 
     public Bootstrapper(HashedCertifiedBlock anchor, Parameters params, Store store,
-                        CommonCommunications<Terminal, Concierge> bootstrapComm) {
+                        CommonCommunications<Terminal, Concierge> bootstrapComm, ScheduledExecutorService scheduler) {
         this.anchor = anchor;
         this.params = params;
         this.store = store;
         this.comms = bootstrapComm;
+        this.scheduler = scheduler;
         CertifiedBlock g = store.getCertifiedBlock(ULong.valueOf(0));
         store.put(anchor);
         if (g != null) {
@@ -75,7 +75,6 @@ public class Bootstrapper {
             log.info("Restore using no prior state on: {}", params.member().getId());
             lastCheckpoint = null;
         }
-        scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
     }
 
     public CompletableFuture<SynchronizedState> synchronize() {
