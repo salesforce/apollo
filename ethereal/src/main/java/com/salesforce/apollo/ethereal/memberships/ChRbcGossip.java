@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -131,9 +132,13 @@ public class ChRbcGossip {
                 timer.stop();
             }
             if (started.get()) {
-                scheduled = scheduler.schedule(
-                () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(frequency, scheduler), log)),
-                frequency.toNanos(), TimeUnit.NANOSECONDS);
+                try {
+                    scheduled = scheduler.schedule(
+                    () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(frequency, scheduler), log)),
+                    frequency.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (RejectedExecutionException e) {
+                    log.trace("Reject scheduling on: {}", member.getId());
+                }
             }
         }, frequency);
     }

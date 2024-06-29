@@ -25,6 +25,7 @@ import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +56,7 @@ public class Producer {
     private final        Semaphore                    serialize          = new Semaphore(1);
     private final        ViewAssembly                 assembly;
     private final        int                          maxEpoch;
-    private volatile     boolean                      assembled          = false;
+    private final        AtomicBoolean                assembled          = new AtomicBoolean(false);
 
     public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint, String label,
                     ScheduledExecutorService scheduler) {
@@ -116,7 +117,7 @@ public class Producer {
                 if (super.complete()) {
                     log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId,
                               getSlate().keySet().stream().sorted().toList(), params().member().getId());
-                    assembled = true;
+                    assembled.set(true);
                     return true;
                 }
                 return false;
@@ -132,14 +133,20 @@ public class Producer {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        final Block prev = previousBlock.get().block;
-        // genesis block won't ever be 0
-        if (prev.hasGenesis() || (prev.hasReconfigure() && prev.getReconfigure().getCheckpointTarget() == 0)) {
-            transitions.checkpoint();
-        } else {
-            log.trace("Checkpoint target: {} for: {} on: {}", prev.getReconfigure().getCheckpointTarget(),
-                      params().context().getId(), params().member().getId());
-            transitions.start();
+        try {
+            Thread.ofVirtual().start(Utils.wrapped(() -> {
+                final Block prev = previousBlock.get().block;
+                // genesis block won't ever be 0
+                if (prev.hasGenesis() || (prev.hasReconfigure() && prev.getReconfigure().getCheckpointTarget() == 0)) {
+                    transitions.checkpoint();
+                } else {
+                    log.trace("Checkpoint target: {} for: {} on: {}", prev.getReconfigure().getCheckpointTarget(),
+                              params().context().getId(), params().member().getId());
+                    transitions.start();
+                }
+            }, log));
+        } catch (RejectedExecutionException e) {
+            log.trace("Reject fork on: {}", params().member().getId());
         }
     }
 
@@ -214,16 +221,32 @@ public class Producer {
     }
 
     private void newEpoch(Integer epoch) {
-        log.trace("new epoch: {} on: {}", epoch, params().member().getId());
-        assembly.newEpoch();
-        var last = epoch >= maxEpoch && assembled;
-        if (last) {
-            controller.completeIt();
-            Producer.this.transitions.viewComplete();
-        } else {
-            ds.reset();
+        Thread.ofVirtual().start(Utils.wrapped(() -> {
+            try {
+                serialize.acquire();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            try {
+                log.trace("new epoch: {} on: {}", epoch, params().member().getId());
+                assembly.newEpoch();
+                var last = epoch >= maxEpoch && assembled.get();
+                if (last) {
+                    controller.completeIt();
+                    Producer.this.transitions.viewComplete();
+                } else {
+                    ds.reset();
+                }
+                transitions.newEpoch(epoch, last);
+            } finally {
+                serialize.release();
+            }
+        }, log));
+        var awaiting = serialize.getQueueLength();
+        if (awaiting > 0) {
+            log.error("Serialize: {} on: {}", awaiting, params().member().getId());
         }
-        transitions.newEpoch(epoch, last);
     }
 
     private Parameters params() {
@@ -403,25 +426,27 @@ public class Producer {
 
         @Override
         public void checkpoint() {
-            log.info("Generating checkpoint block on: {}", params().member().getId());
-            Block ckpt = view.checkpoint();
-            if (ckpt == null) {
-                log.error("Cannot generate checkpoint block on: {}", params().member().getId());
-                transitions.failed();
-                return;
-            }
-            var next = new HashedBlock(params().digestAlgorithm(), ckpt);
-            previousBlock.set(next);
-            checkpoint.set(next);
-            var validation = view.generateValidation(next);
-            ds.offer(validation);
-            final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
-            pending.put(next.hash, p);
-            p.witnesses.put(params().member(), validation);
-            log.info("Produced: {} hash: {} height: {} for: {} on: {}", next.block.getBodyCase(), next.hash,
-                     next.height(), getViewId(), params().member().getId());
-            processPendingValidations(next, p);
-            transitions.checkpointed();
+            Thread.ofVirtual().start(Utils.wrapped(() -> {
+                log.info("Generating checkpoint block on: {}", params().member().getId());
+                Block ckpt = view.checkpoint();
+                if (ckpt == null) {
+                    log.error("Cannot generate checkpoint block on: {}", params().member().getId());
+                    transitions.failed();
+                    return;
+                }
+                var next = new HashedBlock(params().digestAlgorithm(), ckpt);
+                previousBlock.set(next);
+                checkpoint.set(next);
+                var validation = view.generateValidation(next);
+                ds.offer(validation);
+                final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
+                pending.put(next.hash, p);
+                p.witnesses.put(params().member(), validation);
+                log.info("Produced: {} hash: {} height: {} for: {} on: {}", next.block.getBodyCase(), next.hash,
+                         next.height(), getViewId(), params().member().getId());
+                processPendingValidations(next, p);
+                transitions.checkpointed();
+            }, log));
         }
 
         @Override
@@ -437,7 +462,7 @@ public class Producer {
 
         @Override
         public void reconfigure() {
-            Producer.this.reconfigure();
+            Thread.ofVirtual().start(Utils.wrapped(Producer.this::reconfigure, log));
         }
 
         @Override
