@@ -20,6 +20,7 @@ import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -199,7 +200,9 @@ public class ViewAssembly {
         + selected.assembly.size();
         log.debug("View Assembly: {} completed assembly: {} on: {}", nextViewId,
                   slate.keySet().stream().sorted().toList(), params().member().getId());
-        transitions.complete();
+        Thread.ofVirtual().start(Utils.wrapped(() -> {
+            transitions.complete();
+        }, log));
         return true;
     }
 

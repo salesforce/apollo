@@ -145,11 +145,13 @@ public class RbcTest {
 
         System.out.println();
 
-        ConsoleReporter.forRegistry(registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+        if (Boolean.getBoolean("reportMetrics")) {
+            ConsoleReporter.forRegistry(registry)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
+        }
     }
 
     class Receiver implements MessageHandler {

@@ -1445,7 +1445,7 @@ public class CHOAM {
                                       .setSignature(params.member().sign(inView.toByteString()).toSig())
                                       .build();
             var countdown = new CountDownLatch(sampled.size());
-            sampled.parallelStream().map(m -> {
+            sampled.stream().map(m -> {
                 var connection = comm.connect(m);
                 log.trace("connect to: {} is: {} on: {}", m.getId(), connection, params.member().getId());
                 return connection;

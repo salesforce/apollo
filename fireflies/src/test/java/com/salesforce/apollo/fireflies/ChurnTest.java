@@ -260,12 +260,14 @@ public class ChurnTest {
             assertTrue(testGraph.isSC());
         }
 
-        System.out.println("Node 0 metrics");
-        ConsoleReporter.forRegistry(node0Registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+        if (Boolean.getBoolean("reportMetrics")) {
+            System.out.println("Node 0 metrics");
+            ConsoleReporter.forRegistry(node0Registry)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
+        }
     }
 
     private void initialize() {

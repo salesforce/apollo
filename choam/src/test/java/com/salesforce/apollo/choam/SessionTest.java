@@ -178,10 +178,12 @@ public class SessionTest {
             }
         }
         System.out.println();
-        ConsoleReporter.forRegistry(reg)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+        if (Boolean.getBoolean("reportMetrics")) {
+            ConsoleReporter.forRegistry(reg)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
+        }
     }
 }

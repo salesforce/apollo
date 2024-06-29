@@ -203,12 +203,13 @@ public class TestCHOAM {
             choams.values().forEach(e -> e.stop());
 
             System.out.println();
-
-            ConsoleReporter.forRegistry(registry)
-                           .convertRatesTo(TimeUnit.SECONDS)
-                           .convertDurationsTo(TimeUnit.MILLISECONDS)
-                           .build()
-                           .report();
+            if (Boolean.getBoolean("reportMetrics")) {
+                ConsoleReporter.forRegistry(registry)
+                               .convertRatesTo(TimeUnit.SECONDS)
+                               .convertDurationsTo(TimeUnit.MILLISECONDS)
+                               .build()
+                               .report();
+            }
         }
         assertTrue(checkpointOccurred.get(5, TimeUnit.SECONDS));
     }
