@@ -429,6 +429,5 @@ public class Ethereal {
         public void run() {
             consumer.accept(unit);
         }
-
     }
 }
