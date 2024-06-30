@@ -48,7 +48,7 @@ public class ViewManagement {
     private static final Logger log = LoggerFactory.getLogger(ViewManagement.class);
 
     final            AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
-    final            Set<Digest>                                   observers    = new ConcurrentSkipListSet<>();
+    final            Map<Digest, Integer>                          observers    = new ConcurrentSkipListMap<>();
     private final    AtomicInteger                                 attempt      = new AtomicInteger();
     private final    Digest                                        bootstrapView;
     private final    DynamicContext<Participant>                   context;
@@ -127,7 +127,7 @@ public class ViewManagement {
     }
 
     void enjoin(Join join, Digest observer) {
-        if (!observers.contains(node.getId()) || !observers.contains(observer)) {
+        if (!observers.containsKey(node.getId()) || !observers.containsKey(observer)) {
             log.trace("Not observer, ignored enjoin from: {} on: {}", observer, node.getId());
             throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not observer"));
         }
@@ -152,7 +152,7 @@ public class ViewManagement {
                           context.getId(), cardinality(), node.getId());
                 return;
             }
-            if (!observers.contains(node.getId())) {
+            if (!observers.containsKey(node.getId())) {
                 log.trace("Not observer, ignoring Join from: {}  observers: {} on: {}", from, observers, node.getId());
                 throw new StatusRuntimeException(
                 Status.FAILED_PRECONDITION.withDescription("Not observer, ignored join of view"));
@@ -170,7 +170,7 @@ public class ViewManagement {
     void gc(Participant member) {
         assert member != null;
         view.stable(() -> {
-            if (observers.remove(member.id)) {
+            if (observers.remove(member.id) != null) {
                 log.trace("Removed observer: {} view: {} on: {}", member.id, currentView.get(), node.getId());
                 resetObservers();
             }
@@ -187,6 +187,10 @@ public class ViewManagement {
                                                                                    joins.size() * 2), p);
         joins.keySet().forEach(bff::add);
         return bff;
+    }
+
+    Integer highWater(Digest observer) {
+        return observers.get(observer);
     }
 
     /**
@@ -372,7 +376,7 @@ public class ViewManagement {
                               .toList(), from, responseObserver, timer);
                 return;
             }
-            if (!observers.contains(node.getId())) {
+            if (!observers.containsKey(node.getId())) {
                 log.trace("Not observer, ignoring Join from: {}  observers: {} on: {}", from, observers, node.getId());
                 responseObserver.onError(new StatusRuntimeException(
                 Status.FAILED_PRECONDITION.withDescription("Not observer, ignored join of view")));
@@ -401,8 +405,8 @@ public class ViewManagement {
             log.debug("Member pending join: {} view: {} context: {} on: {}", from, currentView(), context.getId(),
                       node.getId());
             var enjoining = new SliceIterator<>("Enjoining[%s:%s]".formatted(currentView(), from), node,
-                                                observers.stream().map(context::getActiveMember).toList(), view.comm,
-                                                scheduler);
+                                                observers.keySet().stream().map(context::getActiveMember).toList(),
+                                                view.comm, scheduler);
             enjoining.iterate(t -> t.enjoin(join), (_, _, _, _) -> true, () -> {
             }, Duration.ofMillis(1));
         });
@@ -484,7 +488,9 @@ public class ViewManagement {
                 return;
             }
         }
-        if ((context.offlineCount() > 0 || !joins.isEmpty())) {
+        var change = context.offlineCount() > 0 || !joins.isEmpty();
+        var shouldChange = isObserver() || view.hasMajorityObservervations(bootstrap);
+        if (change && shouldChange) {
             initiateViewChange();
         } else {
             view.scheduleViewChange();
@@ -492,7 +498,7 @@ public class ViewManagement {
     }
 
     Set<Digest> observers() {
-        return observers;
+        return observers.keySet();
     }
 
     List<Digest> observersList() {
@@ -535,6 +541,10 @@ public class ViewManagement {
         return hex;
     }
 
+    void resetHighWater() {
+        observers.entrySet().forEach(e -> e.setValue(-1));
+    }
+
     Redirect seed(Registration registration, Digest from) {
         final var requestView = Digest.from(registration.getView());
 
@@ -560,7 +570,7 @@ public class ViewManagement {
         return view.stable(() -> {
             var newMember = view.new Participant(note.getId());
 
-            final var introductions = observers.stream().map(context::getMember).toList();
+            final var introductions = observers.keySet().stream().map(context::getMember).toList();
 
             log.info("Member seeding: {} view: {} context: {} introductions: {} on: {}", newMember.getId(),
                      currentView(), context.getId(), introductions.stream().map(p -> p.getId()).toList(), node.getId());
@@ -582,11 +592,15 @@ public class ViewManagement {
         this.bootstrap = bootstrap;
     }
 
+    void updateHighWater(Digest d, int attempt) {
+        observers.compute(d, (k, v) -> attempt <= v ? v : attempt);
+    }
+
     /**
      * @return true if the receiver is part of the BFT Observers of this group
      */
     private boolean isObserver() {
-        return observers.contains(node.getId());
+        return observers.containsKey(node.getId());
     }
 
     private void joined(Collection<SignedNote> seedSet, Digest from, StreamObserver<Gateway> responseObserver,
@@ -632,9 +646,9 @@ public class ViewManagement {
         context.bftSubset(diadem.get().compact(), context::isActive)
                .stream()
                .map(Member::getId)
-               .forEach(observers::add);
+               .forEach(d -> observers.put(d, -1));
         if (observers.isEmpty()) {
-            observers.add(node.getId()); // bootstrap case
+            observers.put(node.getId(), -1); // bootstrap case
         }
         if (observers.size() > 1 && observers.size() < context.getRingCount()) {
             log.debug("Incomplete observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
@@ -653,7 +667,7 @@ public class ViewManagement {
         resetObservers();
         log.trace("View: {} set diadem: {} cardinality: {} observers: {} view: {} context: {} size: {} on: {}",
                   context.getId(), diadem.get().compactWrapped(), diadem.get().getCardinality(),
-                  observers.stream().toList(), currentView(), context.getId(), context.size(), node.getId());
+                  observers.keySet().stream().toList(), currentView(), context.getId(), context.size(), node.getId());
     }
 
     record Ballot(Digest view, List<Digest> leaving, List<Digest> joining, int hash) {

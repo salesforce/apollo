@@ -392,6 +392,10 @@ public class View {
         return node;
     }
 
+    boolean hasMajorityObservervations(boolean bootstrap) {
+        return bootstrap && context.size() == 1 || observations.size() >= context.majority();
+    }
+
     boolean hasPendingRebuttals() {
         return !pendingRebuttals.isEmpty();
     }
@@ -835,7 +839,8 @@ public class View {
      */
     private boolean add(SignedViewChange observation) {
         var svu = new SVU(observation, digestAlgo);
-        if (!viewManagement.isObserver(svu.observer)) {
+        var highWater = viewManagement.highWater(svu.observer);
+        if (highWater == null) {
             log.trace("Invalid observer: {} current: {} on: {}", svu.observer, currentView(), node.getId());
             return false;
         }
@@ -845,15 +850,15 @@ public class View {
                       node.getId());
             return false;
         }
+        if (highWater >= svu.attempt) {
+            log.trace("Redundant view change: {} current: {} view: {} from {} on: {}", svu.attempt, highWater,
+                      currentView(), svu.observer, node.getId());
+            return false;
+        }
         final var member = context.getActiveMember(svu.observer);
         if (member == null) {
             log.trace("Cannot validate view change: {} current: {} from: {} on: {}", inView, currentView(),
                       svu.observer, node.getId());
-            return false;
-        }
-        if (!viewManagement.isObserver(member.id)) {
-            log.trace("Not an observer of: {} current: {} from: {} on: {}", inView, currentView(), svu.observer,
-                      node.getId());
             return false;
         }
         final var signature = JohnHancock.from(observation.getSignature());
@@ -866,6 +871,8 @@ public class View {
                     log.trace("Stale observation: {} current: {} view change: {} current: {} offline: {} on: {}",
                               svu.attempt, cur.attempt, inView, currentView(), svu.observer, node.getId());
                     return cur;
+                } else {
+                    viewManagement.updateHighWater(d, svu.attempt);
                 }
             }
             log.trace("Observation: {} current: {} view change: {} from: {} on: {}", svu.attempt, inView, currentView(),

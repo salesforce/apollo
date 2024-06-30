@@ -99,13 +99,14 @@ public class CHOAM {
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
     private final PendingViews                                          pendingViews          = new PendingViews();
     private final ScheduledExecutorService                              scheduler;
-    private final Semaphore                                             linear                = new Semaphore(1);
+    private final ExecutorService                                       linear;
     private final AtomicBoolean                                         ongoingJoin           = new AtomicBoolean();
 
     public CHOAM(Parameters params) {
         scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
         this.params = params;
+        linear = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         pendingViews.add(params.context().getId(), params.context().delegate());
 
         rotateViewKeys();
@@ -116,18 +117,16 @@ public class CHOAM {
         combine = new ReliableBroadcaster(bContext, params.member(), params.combine(), params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics(),
                                           adapter);
-        combine.registerHandler((_, messages) -> {
-            Thread.ofVirtual().start(() -> {
-                if (!started.get()) {
-                    return;
-                }
-                try {
-                    combine(messages);
-                } catch (Throwable t) {
-                    log.error("Failed to combine messages on: {}", params.member().getId(), t);
-                }
-            });
-        });
+        combine.registerHandler((_, messages) -> Thread.ofVirtual().start(() -> {
+            if (!started.get()) {
+                return;
+            }
+            try {
+                combine(messages);
+            } catch (Throwable t) {
+                log.error("Failed to combine messages on: {}", params.member().getId(), t);
+            }
+        }));
         head.set(new NullBlock(params.digestAlgorithm()));
         view.set(new NullBlock(params.digestAlgorithm()));
         checkpoint.set(new NullBlock(params.digestAlgorithm()));
@@ -354,10 +353,11 @@ public class CHOAM {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        linear.release(10000);
+        linear.shutdown();
         try {
             scheduler.shutdownNow();
         } catch (Throwable e) {
+            // ignore
         }
         session.cancelAll();
         final var c = current.get();
@@ -365,11 +365,13 @@ public class CHOAM {
             try {
                 c.complete();
             } catch (Throwable e) {
+                // ignore
             }
         }
         try {
             combine.stop();
         } catch (Throwable e) {
+            // ignore
         }
     }
 
@@ -577,12 +579,11 @@ public class CHOAM {
                  h.hash, h.height(), execs.size(), params.member().getId());
         for (int i = 0; i < execs.size(); i++) {
             var exec = execs.get(i);
-            final var index = i;
             Digest hash = hashOf(exec, params.digestAlgorithm());
             var stxn = session.complete(hash);
             try {
                 params.processor()
-                      .execute(index, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
+                      .execute(i, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
                                stxn == null ? null : stxn.onCompletion());
             } catch (Throwable t) {
                 log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash, h.height(),
@@ -591,7 +592,7 @@ public class CHOAM {
         }
     }
 
-    private CheckpointSegments fetch(CheckpointReplication request, Digest from) {
+    private CheckpointSegments fetch(CheckpointReplication request) {
         CheckpointState state = cachedCheckpoints.get(ULong.valueOf(request.getCheckpoint()));
         if (state == null) {
             log.info("No cached checkpoint for {} on: {}", request.getCheckpoint(), params.member().getId());
@@ -604,14 +605,14 @@ public class CHOAM {
                                  .build();
     }
 
-    private Blocks fetchBlocks(BlockReplication rep, Digest from) {
+    private Blocks fetchBlocks(BlockReplication rep) {
         BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
         Blocks.Builder blocks = Blocks.newBuilder();
         store.fetchBlocks(bff, blocks, 100, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
         return blocks.build();
     }
 
-    private Blocks fetchViewChain(BlockReplication rep, Digest from) {
+    private Blocks fetchViewChain(BlockReplication rep) {
         BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
         Blocks.Builder blocks = Blocks.newBuilder();
         store.fetchViewChain(bff, blocks, 100, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
@@ -649,7 +650,7 @@ public class CHOAM {
         return isNext;
     }
 
-    private Empty join(SignedViewMember nextView, Digest from) {
+    private void join(SignedViewMember nextView, Digest from) {
         var c = current.get();
         if (c == null) {
             log.trace("No committee for: {} to join: {} diadem: {} on: {}", from,
@@ -658,7 +659,6 @@ public class CHOAM {
             throw new StatusRuntimeException(FAILED_PRECONDITION);
         }
         c.join(nextView, from);
-        return Empty.getDefaultInstance();
     }
 
     private Supplier<PendingViews> pendingViews() {
@@ -1196,25 +1196,7 @@ public class CHOAM {
 
         @Override
         public void combine() {
-            Thread.ofVirtual().start(Utils.wrapped(() -> {
-                if (!started.get()) {
-                    return;
-                }
-                try {
-                    linear.acquire();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-                try {
-                    CHOAM.this.combine();
-                } finally {
-                    linear.release();
-                }
-            }, log));
-            if (linear.getQueueLength() > 0) {
-                log.info("Linear Q: {} on: {}", linear.getQueueLength(), params.member().getId());
-            }
+            linear.execute(Utils.wrapped(() -> CHOAM.this.combine(), log));
         }
 
         @Override
@@ -1270,17 +1252,17 @@ public class CHOAM {
 
         @Override
         public CheckpointSegments fetch(CheckpointReplication request, Digest from) {
-            return CHOAM.this.fetch(request, from);
+            return CHOAM.this.fetch(request);
         }
 
         @Override
         public Blocks fetchBlocks(BlockReplication request, Digest from) {
-            return CHOAM.this.fetchBlocks(request, from);
+            return CHOAM.this.fetchBlocks(request);
         }
 
         @Override
         public Blocks fetchViewChain(BlockReplication request, Digest from) {
-            return CHOAM.this.fetchViewChain(request, from);
+            return CHOAM.this.fetchViewChain(request);
         }
 
         @Override
@@ -1505,9 +1487,6 @@ public class CHOAM {
         }
 
         record Attempt(Member m, ListenableFuture<Empty> fs) {
-        }
-
-        private record JoinState(AtomicBoolean halt, Thread joining) {
         }
     }
 

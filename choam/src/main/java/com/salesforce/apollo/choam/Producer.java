@@ -53,7 +53,7 @@ public class Producer {
     private final        Transitions                  transitions;
     private final        ViewContext                  view;
     private final        Digest                       nextViewId;
-    private final        Semaphore                    serialize          = new Semaphore(1);
+    private final        ExecutorService              serialize;
     private final        ViewAssembly                 assembly;
     private final        int                          maxEpoch;
     private final        AtomicBoolean                assembled          = new AtomicBoolean(false);
@@ -94,7 +94,7 @@ public class Producer {
             log.trace("Pid: {} for: {} on: {}", pid, getViewId(), params().member().getId());
             config.setPid(pid).setnProc((short) view.roster().size());
         }
-
+        serialize = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + (8 * 1024), ds, this::serial,
@@ -155,7 +155,7 @@ public class Producer {
             return;
         }
         log.trace("Closing producer for: {} on: {}", getViewId(), params().member().getId());
-        serialize.release(10000);
+        serialize.shutdown();
         controller.stop();
         coordinator.stop();
         ds.close();
@@ -221,32 +221,18 @@ public class Producer {
     }
 
     private void newEpoch(Integer epoch) {
-        Thread.ofVirtual().start(Utils.wrapped(() -> {
-            try {
-                serialize.acquire();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
+        serialize.execute(Utils.wrapped(() -> {
+            log.trace("new epoch: {} on: {}", epoch, params().member().getId());
+            assembly.newEpoch();
+            var last = epoch >= maxEpoch && assembled.get();
+            if (last) {
+                controller.completeIt();
+                Producer.this.transitions.viewComplete();
+            } else {
+                ds.reset();
             }
-            try {
-                log.trace("new epoch: {} on: {}", epoch, params().member().getId());
-                assembly.newEpoch();
-                var last = epoch >= maxEpoch && assembled.get();
-                if (last) {
-                    controller.completeIt();
-                    Producer.this.transitions.viewComplete();
-                } else {
-                    ds.reset();
-                }
-                transitions.newEpoch(epoch, last);
-            } finally {
-                serialize.release();
-            }
+            transitions.newEpoch(epoch, last);
         }, log));
-        var awaiting = serialize.getQueueLength();
-        if (awaiting > 0) {
-            log.error("Serialize: {} on: {}", awaiting, params().member().getId());
-        }
     }
 
     private Parameters params() {
@@ -374,27 +360,14 @@ public class Producer {
     }
 
     private void serial(List<ByteString> preblock, Boolean last) {
-        Thread.ofVirtual().start(() -> {
-            try {
-                serialize.acquire();
-                create(preblock, last);
-            } catch (Throwable t) {
-                log.error("Error processing preblock last: {} on: {}", last, params().member().getId(), t);
-            } finally {
-                serialize.release();
-            }
-        });
-        var awaiting = serialize.getQueueLength();
-        if (awaiting > 0) {
-            log.error("Serialize: {} on: {}", awaiting, params().member().getId());
-        }
+        serialize.execute(Utils.wrapped(() -> create(preblock, last), log));
     }
 
     private PendingBlock validate(Validate v) {
         Digest hash = Digest.from(v.getHash());
         var p = pending.get(hash);
         if (p == null) {
-            pendingValidations.computeIfAbsent(hash, h -> new CopyOnWriteArrayList<>()).add(v);
+            pendingValidations.computeIfAbsent(hash, _ -> new CopyOnWriteArrayList<>()).add(v);
             return null;
         }
         return validate(v, p, hash);
@@ -442,6 +415,7 @@ public class Producer {
                 final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
                 pending.put(next.hash, p);
                 p.witnesses.put(params().member(), validation);
+                assert next.block != null;
                 log.info("Produced: {} hash: {} height: {} for: {} on: {}", next.block.getBodyCase(), next.hash,
                          next.height(), getViewId(), params().member().getId());
                 processPendingValidations(next, p);

@@ -98,6 +98,8 @@ public class ChRbcGossip {
                     log.error("Error in gossip on: {}", member.getId(), e);
                 }
             }, log)), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            log.trace("Rejected scheduling gossip on: {}", member.getId());
         } catch (Throwable e) {
             log.error("Error in gossip on: {}", member.getId(), e);
         }
