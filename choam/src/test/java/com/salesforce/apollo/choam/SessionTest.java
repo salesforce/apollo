@@ -84,7 +84,8 @@ public class SessionTest {
             });
             return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
         };
-        Session session = new Session(params, service);
+        Session session = new Session(params, service,
+                                      Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
         session.setView(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, CertifiedBlock.newBuilder()
                                                                                         .setBlock(Block.newBuilder()
                                                                                                        .setHeader(
@@ -136,7 +137,7 @@ public class SessionTest {
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
 
-        Session session = new Session(params, service);
+        Session session = new Session(params, service, scheduler);
         session.setView(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, CertifiedBlock.newBuilder()
                                                                                         .setBlock(Block.newBuilder()
                                                                                                        .setHeader(
@@ -177,10 +178,12 @@ public class SessionTest {
             }
         }
         System.out.println();
-        ConsoleReporter.forRegistry(reg)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+        if (Boolean.getBoolean("reportMetrics")) {
+            ConsoleReporter.forRegistry(reg)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
+        }
     }
 }

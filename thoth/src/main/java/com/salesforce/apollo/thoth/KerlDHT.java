@@ -146,7 +146,7 @@ public class KerlDHT implements ProtoKERLService {
         this.connectionPool = connectionPool;
         kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
         this.reconcile = new RingCommunications<>(this.context, member, reconcileComms);
-        this.kerlSpace = new KerlSpace(connectionPool, member.getId());
+        this.kerlSpace = new KerlSpace(connectionPool, member.getId(), digestAlgorithm);
 
         initializeSchema();
         kerl = new CachingKERL(f -> {
@@ -738,13 +738,14 @@ public class KerlDHT implements ProtoKERLService {
         }
         dhtComms.register(context.getId(), service, validator);
         reconcileComms.register(context.getId(), reconciliation, validator);
-        reconcile(scheduler, duration);
+        reconcile(duration);
     }
 
     public void stop() {
         if (!started.compareAndSet(true, false)) {
             return;
         }
+        scheduler.shutdownNow();
         dhtComms.deregister(context.getId());
         reconcileComms.deregister(context.getId());
     }
@@ -920,7 +921,7 @@ public class KerlDHT implements ProtoKERLService {
 
     private void reconcile(Optional<Update> result,
                            RingCommunications.Destination<Member, ReconciliationService> destination,
-                           ScheduledExecutorService scheduler, Duration duration) {
+                           Duration duration) {
         if (!started.get()) {
             return;
         }
@@ -938,7 +939,7 @@ public class KerlDHT implements ProtoKERLService {
             }
         }
         if (started.get()) {
-            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> reconcile(scheduler, duration), log)),
+            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> reconcile(duration), log)),
                                duration.toMillis(), TimeUnit.MILLISECONDS);
         }
     }
@@ -957,14 +958,14 @@ public class KerlDHT implements ProtoKERLService {
                                        .build());
     }
 
-    private void reconcile(ScheduledExecutorService scheduler, Duration duration) {
+    private void reconcile(Duration duration) {
         if (!started.get()) {
             return;
         }
         Thread.ofVirtual()
               .start(() -> reconcile.execute(this::reconcile,
                                              (futureSailor, destination) -> reconcile(futureSailor, destination,
-                                                                                      scheduler, duration)));
+                                                                                      duration)));
 
     }
 

@@ -138,7 +138,7 @@ public class TestCHOAM {
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
-                public void execute(int index, Digest hash, Transaction t, CompletableFuture f, Executor executor) {
+                public void execute(int index, Digest hash, Transaction t, CompletableFuture f) {
                     if (f != null) {
                         f.completeAsync(() -> new Object(), executor);
                     }
@@ -203,12 +203,13 @@ public class TestCHOAM {
             choams.values().forEach(e -> e.stop());
 
             System.out.println();
-
-            ConsoleReporter.forRegistry(registry)
-                           .convertRatesTo(TimeUnit.SECONDS)
-                           .convertDurationsTo(TimeUnit.MILLISECONDS)
-                           .build()
-                           .report();
+            if (Boolean.getBoolean("reportMetrics")) {
+                ConsoleReporter.forRegistry(registry)
+                               .convertRatesTo(TimeUnit.SECONDS)
+                               .convertDurationsTo(TimeUnit.MILLISECONDS)
+                               .build()
+                               .report();
+            }
         }
         assertTrue(checkpointOccurred.get(5, TimeUnit.SECONDS));
     }

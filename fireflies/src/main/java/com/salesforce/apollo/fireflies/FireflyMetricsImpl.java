@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.codahale.metrics.MetricRegistry.name;
-
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
@@ -15,9 +13,10 @@ import com.codahale.metrics.Timer;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.protocols.EndpointMetricsImpl;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMetrics {
     private final Meter     accusations;
@@ -48,6 +47,7 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     private final Timer     seedDuration;
     private final Meter     shunnedGossip;
     private final Meter     viewChanges;
+    private final Timer     inboundEnjoinDuration;
 
     public FireflyMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
@@ -80,6 +80,7 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         shunnedGossip = registry.meter(name(context.shortString(), "ff.gossip.shunned"));
         inboundSeed = registry.histogram(name(context.shortString(), "ff.seed.inbound.bytes"));
         viewChanges = registry.meter(name(context.shortString(), "ff.view.change"));
+        inboundEnjoinDuration = registry.timer(name(context.shortString(), "ff.enjoin.duration"));
     }
 
     @Override
@@ -100,6 +101,11 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     @Override
     public Histogram gossipResponse() {
         return gossipResponse;
+    }
+
+    @Override
+    public Timer inboundEnjoinDuration() {
+        return inboundEnjoinDuration;
     }
 
     @Override

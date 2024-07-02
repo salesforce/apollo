@@ -140,15 +140,15 @@ public class MtlsServer implements RouterSupplier {
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
                              LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
                              Predicate<FernetServerInterceptor.HashedToken> validator, ExecutorService executor) {
-        if (executor == null) {
-            executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
-        }
+        //        if (executor == null) {
+        //            executor = Executors.newVirtualThreadPerTaskExecutor();
+        //        }
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         NettyServerBuilder serverBuilder = NettyServerBuilder.forAddress(epProvider.getBindAddress())
-                                                             .executor(executor)
+                                                             //                                                             .executor(executor)
                                                              .withOption(ChannelOption.SO_REUSEADDR, true)
                                                              .sslContext(supplier.forServer(ClientAuth.REQUIRE,
                                                                                             epProvider.getAlias(),

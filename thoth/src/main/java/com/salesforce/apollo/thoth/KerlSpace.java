@@ -30,6 +30,7 @@ import org.jooq.DSLContext;
 import org.jooq.Record1;
 import org.jooq.SQLDialect;
 import org.jooq.exception.DataAccessException;
+import org.jooq.exception.IntegrityConstraintViolationException;
 import org.jooq.impl.DSL;
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -61,10 +62,12 @@ public class KerlSpace {
     private static final Logger             log = LoggerFactory.getLogger(KerlSpace.class);
     private final        JdbcConnectionPool connectionPool;
     private final        Digest             member;
+    private final        DigestAlgorithm    algorithm;
 
-    public KerlSpace(JdbcConnectionPool connectionPool, Digest member) {
+    public KerlSpace(JdbcConnectionPool connectionPool, Digest member, DigestAlgorithm algorithm) {
         this.connectionPool = connectionPool;
         this.member = member;
+        this.algorithm = algorithm;
     }
 
     public static void upsert(DSLContext dsl, EventCoords coordinates, Attachment attachment, Digest member) {
@@ -77,7 +80,7 @@ public class KerlSpace {
         Record1<Long> id;
         try {
             id = dsl.insertInto(PENDING_COORDINATES)
-                    .set(PENDING_COORDINATES.DIGEST, coordinates.getDigest().toByteArray())
+                    .set(PENDING_COORDINATES.DIGEST, Digest.from(coordinates.getDigest()).getBytes())
                     .set(PENDING_COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                     .set(PENDING_COORDINATES.ILK, coordinates.getIlk())
@@ -85,14 +88,14 @@ public class KerlSpace {
                          ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger())
                     .returningResult(PENDING_COORDINATES.ID)
                     .fetchOne();
-        } catch (DataAccessException e) {
+        } catch (IntegrityConstraintViolationException e) {
             // Already exists
             id = dsl.select(PENDING_COORDINATES.ID)
                     .from(PENDING_COORDINATES)
                     .join(IDENTIFIER)
                     .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
                     .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                    .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                    .and(PENDING_COORDINATES.DIGEST.eq(Digest.from(coordinates.getDigest()).getBytes()))
                     .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(
                     ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger()))
                     .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
@@ -118,7 +121,7 @@ public class KerlSpace {
         long id;
         try {
             id = context.insertInto(PENDING_COORDINATES)
-                        .set(PENDING_COORDINATES.DIGEST, prevCoords.getDigest().toDigeste().toByteArray())
+                        .set(PENDING_COORDINATES.DIGEST, prevCoords.getDigest().getBytes())
                         .set(PENDING_COORDINATES.IDENTIFIER,
                              context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                         .set(PENDING_COORDINATES.ILK, event.getIlk())
@@ -126,26 +129,30 @@ public class KerlSpace {
                         .returningResult(PENDING_COORDINATES.ID)
                         .fetchOne()
                         .value1();
-        } catch (DataAccessException e) {
+        } catch (IntegrityConstraintViolationException e) {
             // Already exists
             var coordinates = event.getCoordinates();
-            id = context.select(PENDING_COORDINATES.ID)
-                        .from(PENDING_COORDINATES)
-                        .join(IDENTIFIER)
-                        .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
-                        .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                        .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                        .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
-                        .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
-                        .fetchOne()
-                        .value1();
+            var result = context.select(PENDING_COORDINATES.ID)
+                                .from(PENDING_COORDINATES)
+                                .join(IDENTIFIER)
+                                .on(IDENTIFIER.PREFIX.eq(identBytes))
+                                .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                                .and(PENDING_COORDINATES.DIGEST.eq(prevCoords.getDigest().getBytes()))
+                                .and(
+                                PENDING_COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
+                                .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
+                                .fetchOne();
+            if (result == null) {
+                throw new IllegalStateException("upsert failed", e);
+            }
+            id = result.value1();
         }
 
         final var digest = event.hash(digestAlgorithm);
         try {
             context.insertInto(PENDING_EVENT)
                    .set(PENDING_EVENT.COORDINATES, id)
-                   .set(PENDING_EVENT.DIGEST, digest.toDigeste().toByteArray())
+                   .set(PENDING_EVENT.DIGEST, digest.getBytes())
                    .set(PENDING_EVENT.EVENT, event.getBytes())
                    .execute();
         } catch (DataAccessException e) {
@@ -173,7 +180,7 @@ public class KerlSpace {
         Record1<Long> id;
         try {
             id = dsl.insertInto(PENDING_COORDINATES)
-                    .set(PENDING_COORDINATES.DIGEST, coordinates.getDigest().toByteArray())
+                    .set(PENDING_COORDINATES.DIGEST, Digest.from(coordinates.getDigest()).getBytes())
                     .set(PENDING_COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                     .set(PENDING_COORDINATES.ILK, coordinates.getIlk())
@@ -190,7 +197,7 @@ public class KerlSpace {
                     .join(IDENTIFIER)
                     .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
                     .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                    .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                    .and(PENDING_COORDINATES.DIGEST.eq(Digest.from(coordinates.getDigest()).getBytes()))
                     .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(
                     ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger()))
                     .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
@@ -402,13 +409,7 @@ public class KerlSpace {
                                 .where(IDENTIFIER_LOCATION_HASH.DIGEST.ge(interval.getBegin().getBytes()))
                                 .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(interval.getEnd().getBytes()))
                                 .stream()
-                                .map(r -> {
-                                    try {
-                                        return Digest.from(Digeste.parseFrom(r.value1()));
-                                    } catch (InvalidProtocolBufferException e) {
-                                        return null;
-                                    }
-                                })
+                                .map(r -> new Digest(algorithm, r.value1()))
                                 .filter(d -> d != null), dsl.select(PENDING_EVENT.DIGEST)
                                                             .from(PENDING_EVENT)
                                                             .join(PENDING_COORDINATES)

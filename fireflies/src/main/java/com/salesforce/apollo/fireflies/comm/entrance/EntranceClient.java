@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.fireflies.comm.entrance;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
@@ -13,6 +14,7 @@ import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Member;
 
 import java.time.Duration;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -23,10 +25,12 @@ public class EntranceClient implements Entrance {
     private final ManagedServerChannel              channel;
     private final EntranceGrpc.EntranceBlockingStub client;
     private final FireflyMetrics                    metrics;
+    private final EntranceGrpc.EntranceFutureStub   ayncClient;
 
     public EntranceClient(ManagedServerChannel channel, FireflyMetrics metrics) {
         this.channel = channel;
         this.client = channel.wrap(EntranceGrpc.newBlockingStub(channel));
+        ayncClient = channel.wrap(EntranceGrpc.newFutureStub(channel));
         this.metrics = metrics;
     }
 
@@ -46,23 +50,34 @@ public class EntranceClient implements Entrance {
     }
 
     @Override
-    public Gateway join(Join join, Duration timeout) {
+    public ListenableFuture<Gateway> join(Join join, Duration timeout) {
         if (metrics != null) {
             var serializedSize = join.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
             metrics.outboundJoin().update(serializedSize);
         }
 
-        Gateway result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).join(join);
-        if (metrics != null) {
+        ListenableFuture<Gateway> result = ayncClient.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
+                                                     .join(join);
+        result.addListener(() -> {
+            Gateway g = null;
             try {
-                var serializedSize = result.getSerializedSize();
-                metrics.inboundBandwidth().mark(serializedSize);
-                metrics.inboundGateway().update(serializedSize);
-            } catch (Throwable e) {
+                g = result.get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException e) {
                 // nothing
             }
-        }
+            if (metrics != null) {
+                try {
+                    var serializedSize = g.getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.inboundGateway().update(serializedSize);
+                } catch (Throwable e) {
+                    // nothing
+                }
+            }
+        }, Runnable::run);
         return result;
     }
 

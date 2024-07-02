@@ -198,7 +198,7 @@ public class ReliableBroadcaster {
         var initialDelay = Entropy.nextBitsStreamLong(duration.toMillis());
         log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         comm.register(context.getId(), new Service(), validator);
-        var scheduler = Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory());
+        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(duration, scheduler), log)),
                            initialDelay, TimeUnit.MILLISECONDS);
     }
@@ -466,7 +466,7 @@ public class ReliableBroadcaster {
 
         public BloomFilter<Digest> forReconcilliation() {
             var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), params.bufferSize, params.falsePositiveRate);
-            state.keySet().forEach(k -> biff.add(k));
+            state.keySet().stream().collect(Utils.toShuffledList()).forEach(k -> biff.add(k));
             return biff;
         }
 
@@ -476,7 +476,7 @@ public class ReliableBroadcaster {
             }
             log.trace("receiving: {} msgs on: {}", messages.size(), member.getId());
             deliver(messages.stream()
-                            .limit(params.maxMessages)
+                            //                            .limit(params.maxMessages)
                             .map(am -> new state(adapter.hasher.apply(am.getContent()), AgedMessage.newBuilder(am)))
                             .filter(s -> !dup(s))
                             .filter(s -> adapter.verifier.test(s.msg.getContent()))
@@ -492,10 +492,12 @@ public class ReliableBroadcaster {
             PriorityQueue<AgedMessage.Builder> mailBox = new PriorityQueue<>(Comparator.comparingInt(s -> s.getAge()));
             state.values()
                  .stream()
+                 .collect(Utils.toShuffledList())
+                 .stream()
                  .filter(s -> !biff.contains(s.hash))
                  .filter(s -> s.msg.getAge() < maxAge)
                  .forEach(s -> mailBox.add(s.msg));
-            List<AgedMessage> reconciled = mailBox.stream().limit(params.maxMessages).map(b -> b.build()).toList();
+            List<AgedMessage> reconciled = mailBox.stream().map(b -> b.build()).toList();
             if (!reconciled.isEmpty()) {
                 log.trace("reconciled: {} for: {} on: {}", reconciled.size(), from, member.getId());
             }

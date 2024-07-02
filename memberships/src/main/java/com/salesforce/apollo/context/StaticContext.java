@@ -313,21 +313,20 @@ public class StaticContext<T extends Member> implements Context<T> {
      */
     @Override
     public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Predicate<T> excluded) {
-        return ring(entropy.nextInt(rings.length)).stream().collect(new ReservoirSampler<>(excluded, range, entropy));
+        return ring(entropy.nextInt(rings.length)).stream().collect(new ReservoirSampler<>(range, excluded));
     }
 
     /**
      * Answer a random sample of at least range size from the active members of the context
      *
-     * @param range   - the desired range
-     * @param entropy - source o randomness
-     * @param exc     - the member to exclude from sample
+     * @param range - the desired range
+     * @param exc   - the member to exclude from sample
      * @return a random sample set of the view's live members. May be limited by the number of active members.
      */
     @Override
     public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc) {
         Member excluded = exc == null ? null : getMember(exc);
-        return ring(entropy.nextInt(rings.length)).stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
+        return ring(entropy.nextInt(rings.length)).stream().collect(new ReservoirSampler<>(range, (T) excluded));
     }
 
     @Override

@@ -325,7 +325,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             private Supplier<KERL_>                                kerl         = () -> KERL_.getDefaultInstance();
             private SigningMember                                  member;
             private ChoamMetrics                                   metrics;
-            private TransactionExecutor                            processor    = (i, h, t, f, exec) -> {
+            private TransactionExecutor                            processor    = (i, h, t, f) -> {
             };
             private BiConsumer<HashedBlock, CheckpointState>       restorer     = (height, checkpointState) -> {
             };

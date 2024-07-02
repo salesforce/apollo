@@ -6,11 +6,12 @@
  */
 package com.salesforce.apollo.fireflies.comm.gossip;
 
-import com.salesforce.apollo.fireflies.proto.Gossip;
-import com.salesforce.apollo.fireflies.proto.SayWhat;
-import com.salesforce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.fireflies.View.Node;
+import com.salesforce.apollo.fireflies.proto.Gossip;
+import com.salesforce.apollo.fireflies.proto.Join;
+import com.salesforce.apollo.fireflies.proto.SayWhat;
+import com.salesforce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.membership.Member;
 
 import java.io.IOException;
@@ -28,6 +29,11 @@ public interface Fireflies extends Link {
             }
 
             @Override
+            public Void enjoin(Join join) {
+                return null;
+            }
+
+            @Override
             public Member getMember() {
                 return node;
             }
@@ -42,6 +48,8 @@ public interface Fireflies extends Link {
             }
         };
     }
+
+    Void enjoin(Join join);
 
     Gossip gossip(SayWhat sw);
 

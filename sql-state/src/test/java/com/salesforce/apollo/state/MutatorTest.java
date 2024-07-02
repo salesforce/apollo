@@ -59,7 +59,7 @@ public class MutatorTest {
         executor.execute(0, Digest.NONE, Transaction.newBuilder()
                                                     .setContent(
                                                     Txn.newBuilder().setMigration(migration).build().toByteString())
-                                                    .build(), success, r -> r.run());
+                                                    .build(), success);
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -68,7 +68,7 @@ public class MutatorTest {
         executor.execute(1, Digest.NONE, Transaction.newBuilder()
                                                     .setContent(
                                                     Txn.newBuilder().setMigration(migration).build().toByteString())
-                                                    .build(), success, r -> r.run());
+                                                    .build(), success);
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -90,7 +90,7 @@ public class MutatorTest {
         success = new CompletableFuture<>();
         executor.execute(1, Digest.NONE, Transaction.newBuilder()
                                                     .setContent(Txn.newBuilder().setCall(call).build().toByteString())
-                                                    .build(), success, r -> r.run());
+                                                    .build(), success);
 
         CallResult result = (CallResult) success.get(1, TimeUnit.SECONDS);
         assertNotNull(result);
@@ -106,7 +106,7 @@ public class MutatorTest {
         executor.execute(2, Digest.NONE, Transaction.newBuilder()
                                                     .setContent(
                                                     Txn.newBuilder().setBatched(batch.build()).build().toByteString())
-                                                    .build(), success, r -> r.run());
+                                                    .build(), success);
 
         var batchResult = (List<?>) success.get(1, TimeUnit.SECONDS);
         assertNotNull(batchResult);

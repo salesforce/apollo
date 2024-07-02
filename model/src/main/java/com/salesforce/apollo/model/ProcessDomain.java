@@ -133,7 +133,7 @@ public class ProcessDomain extends Domain {
     }
 
     protected void startServices() {
-        dht.start(params.gossipDuration());
+        dht.start(parameters.kerlSpaceDuration);
     }
 
     protected void stopServices() {
@@ -143,7 +143,7 @@ public class ProcessDomain extends Domain {
 
     public record ProcessDomainParameters(String dbURL, Duration dhtOperationsTimeout, String dhtDbUrl,
                                           Path checkpointBaseDir, Duration dhtOpsFrequency, double dhtFpr,
-                                          Duration dhtEventValidTO, int dhtBias, int jdbcMaxConnections,
-                                          double dhtPbyz) {
+                                          Duration dhtEventValidTO, int dhtBias, Duration kerlSpaceDuration,
+                                          int jdbcMaxConnections, double dhtPbyz) {
     }
 }

@@ -54,8 +54,7 @@ public class ScriptTest {
                      .build();
         CompletableFuture<Object> completion = new CompletableFuture<>();
         machine.getExecutor()
-               .execute(0, Digest.NONE, Transaction.newBuilder().setContent(txn.toByteString()).build(), completion,
-                        r -> r.run());
+               .execute(0, Digest.NONE, Transaction.newBuilder().setContent(txn.toByteString()).build(), completion);
 
         assertTrue(ResultSet.class.isAssignableFrom(completion.get().getClass()));
         ResultSet rs = (ResultSet) completion.get();

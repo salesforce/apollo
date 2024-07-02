@@ -1,125 +1,125 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog
-	xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
-      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+		xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd">
 
-	<changeSet author="hhildebrand" id="thoth-1">
-		<sql>create schema if not exists thoth</sql>
+    <changeSet author="hhildebrand" id="thoth-1">
+        <sql>create schema if not exists thoth</sql>
 
-		<createTable tableName="identifier_location_hash"
-			schemaName="thoth">
-			<column name="identifier" type="INT8">
-				<constraints nullable="false" primaryKey="true" />
-			</column>
-			<column name="digest" type="VARBINARY">
-				<constraints nullable="false" />
-			</column>
-		</createTable> 
+        <createTable tableName="identifier_location_hash"
+                     schemaName="thoth">
+            <column name="identifier" type="INT8">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="digest" type="VARBINARY(1024)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
 
-		<addForeignKeyConstraint onDelete="CASCADE"
-			baseColumnNames="identifier" baseTableName="identifier_location_hash"
-			baseTableSchemaName="thoth" constraintName="identifier_location_hash_identifier_fk"
-			referencedTableName="identifier" referencedColumnNames="id"
-			referencedTableSchemaName="stereotomy" />
+        <addForeignKeyConstraint onDelete="CASCADE"
+                                 baseColumnNames="identifier" baseTableName="identifier_location_hash"
+                                 baseTableSchemaName="thoth" constraintName="identifier_location_hash_identifier_fk"
+                                 referencedTableName="identifier" referencedColumnNames="id"
+                                 referencedTableSchemaName="stereotomy"/>
 
         <createIndex indexName="identifier_location_hash_digest"
-            schemaName="thoth" tableName="identifier_location_hash">
-            <column name="digest" />
+                     schemaName="thoth" tableName="identifier_location_hash">
+            <column name="digest"/>
         </createIndex>
 
-		<createTable tableName="pending_coordinates"
-			schemaName="thoth">
-			<column generationType="ALWAYS" name="id" type="IDENTITY">
-				<constraints nullable="false" primaryKey="true"
-					primaryKeyName="pending_coordinates_pkey" />
-			</column>
-			<column name="identifier" type="INT8">
-				<constraints nullable="false" />
-			</column>
-			<column name="digest" type="VARBINARY">
-				<constraints nullable="false" />
-			</column>
-			<column name="sequence_number" type="NUMERIC(20)">
-				<constraints nullable="false" />
-			</column>
-			<column name="ilk" type="VARCHAR(3)">
-				<constraints nullable="false" />
-			</column>
-		</createTable>
+        <createTable tableName="pending_coordinates"
+                     schemaName="thoth">
+            <column generationType="ALWAYS" name="id" type="IDENTITY">
+                <constraints nullable="false" primaryKey="true"
+                             primaryKeyName="pending_coordinates_pkey"/>
+            </column>
+            <column name="identifier" type="INT8">
+                <constraints nullable="false"/>
+            </column>
+            <column name="digest" type="VARBINARY(1024)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sequence_number" type="NUMERIC(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ilk" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
 
-		<sql>alter table thoth.pending_coordinates add constraint
-			pending_coordinates_ilk_validate check (ilk in ('dip', 'drt', 'icp',
-			'ixn', 'nan', 'rct', 'vrc', 'rot'))
-		</sql>
+        <sql>alter table thoth.pending_coordinates
+            add constraint
+                pending_coordinates_ilk_validate check (ilk in ('dip', 'drt', 'icp',
+                                                                'ixn', 'nan', 'rct', 'vrc', 'rot'))
+        </sql>
 
-		<addUniqueConstraint
-			columnNames="identifier, digest, sequence_number, ilk"
-			tableName="pending_coordinates" schemaName="thoth" />
+        <addUniqueConstraint
+                columnNames="identifier, digest, sequence_number, ilk"
+                tableName="pending_coordinates" schemaName="thoth"/>
 
-		<addForeignKeyConstraint onDelete="CASCADE"
-			baseColumnNames="identifier" baseTableName="pending_coordinates"
-			baseTableSchemaName="thoth"
-			constraintName="pending_coordinates_identifier_fk"
-			referencedTableName="identifier" referencedColumnNames="id"
-			referencedTableSchemaName="stereotomy" />
+        <addForeignKeyConstraint onDelete="CASCADE"
+                                 baseColumnNames="identifier" baseTableName="pending_coordinates"
+                                 baseTableSchemaName="thoth"
+                                 constraintName="pending_coordinates_identifier_fk"
+                                 referencedTableName="identifier" referencedColumnNames="id"
+                                 referencedTableSchemaName="stereotomy"/>
 
-		<createIndex indexName="pending_coordinates_digest"
-			schemaName="thoth" tableName="pending_coordinates">
-			<column name="digest" />
-		</createIndex>
+        <createIndex indexName="pending_coordinates_digest"
+                     schemaName="thoth" tableName="pending_coordinates">
+            <column name="digest"/>
+        </createIndex>
 
-		<createTable tableName="pending_event" schemaName="thoth">
-			<column name="coordinates" type="INT8">
-				<constraints nullable="false" primaryKey="true" />
-			</column>
-			<column name="digest" type="VARBINARY">
-				<constraints nullable="false" />
-			</column>
-			<column name="event" type="VARBINARY">
-				<constraints nullable="false" />
-			</column>
-		</createTable>
+        <createTable tableName="pending_event" schemaName="thoth">
+            <column name="coordinates" type="INT8">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="digest" type="VARBINARY(1024)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="event" type="VARBINARY(8192)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
 
-		<addForeignKeyConstraint onDelete="CASCADE"
-			baseColumnNames="coordinates" baseTableName="pending_event"
-			baseTableSchemaName="thoth"
-			constraintName="pending_event_coordinates_fk"
-			referencedTableName="pending_coordinates" referencedColumnNames="id"
-			referencedTableSchemaName="thoth" />
-            
+        <addForeignKeyConstraint onDelete="CASCADE"
+                                 baseColumnNames="coordinates" baseTableName="pending_event"
+                                 baseTableSchemaName="thoth"
+                                 constraintName="pending_event_coordinates_fk"
+                                 referencedTableName="pending_coordinates" referencedColumnNames="id"
+                                 referencedTableSchemaName="thoth"/>
+
         <createTable tableName="pending_attachment" schemaName="thoth">
             <column name="coordinates" type="INT8">
-                <constraints nullable="false" />
+                <constraints nullable="false"/>
             </column>
-            <column name="attachment" type="VARBINARY">
-                <constraints nullable="false" />
+            <column name="attachment" type="VARBINARY(4096)">
+                <constraints nullable="false"/>
             </column>
         </createTable>
 
         <addForeignKeyConstraint onDelete="CASCADE"
-            baseColumnNames="coordinates" baseTableName="pending_attachment"
-            baseTableSchemaName="thoth"
-            constraintName="pending_attachment_coordinates_fk"
-            referencedTableName="pending_coordinates" referencedColumnNames="id"
-            referencedTableSchemaName="thoth" />
-            
+                                 baseColumnNames="coordinates" baseTableName="pending_attachment"
+                                 baseTableSchemaName="thoth"
+                                 constraintName="pending_attachment_coordinates_fk"
+                                 referencedTableName="pending_coordinates" referencedColumnNames="id"
+                                 referencedTableSchemaName="thoth"/>
+
         <createTable tableName="pending_validations" schemaName="thoth">
             <column name="coordinates" type="INT8">
-                <constraints nullable="false" />
+                <constraints nullable="false"/>
             </column>
-            <column name="validations" type="VARBINARY">
-                <constraints nullable="false" />
+            <column name="validations" type="VARBINARY(4096)">
+                <constraints nullable="false"/>
             </column>
         </createTable>
 
         <addForeignKeyConstraint onDelete="CASCADE"
-            baseColumnNames="coordinates" baseTableName="pending_validations"
-            baseTableSchemaName="thoth"
-            constraintName="pending_validations_coordinates_fk"
-            referencedTableName="pending_coordinates" referencedColumnNames="id"
-            referencedTableSchemaName="thoth" />
+                                 baseColumnNames="coordinates" baseTableName="pending_validations"
+                                 baseTableSchemaName="thoth"
+                                 constraintName="pending_validations_coordinates_fk"
+                                 referencedTableName="pending_coordinates" referencedColumnNames="id"
+                                 referencedTableSchemaName="thoth"/>
 
-	</changeSet>
+    </changeSet>
 </databaseChangeLog>

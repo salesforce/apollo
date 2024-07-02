@@ -51,7 +51,11 @@ public class EntranceServer extends EntranceImplBase {
             try {
                 s.join(request, from, responseObserver, timer);
             } catch (Throwable t) {
-                responseObserver.onError(t);
+                try {
+                    responseObserver.onError(t);
+                } catch (Throwable throwable) {
+                    // ignore as response observer is closed
+                }
             }
         });
     }

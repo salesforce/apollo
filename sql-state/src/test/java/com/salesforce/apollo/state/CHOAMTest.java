@@ -117,11 +117,13 @@ public class CHOAMTest {
         members = null;
         System.out.println();
 
-        ConsoleReporter.forRegistry(registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+        if (Boolean.getBoolean("reportMetrics")) {
+            ConsoleReporter.forRegistry(registry)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
+        }
         registry = null;
     }
 
@@ -327,10 +329,8 @@ public class CHOAMTest {
 
                                                            @Override
                                                            public void execute(int i, Digest hash, Transaction tx,
-                                                                               @SuppressWarnings("rawtypes") CompletableFuture onComplete,
-                                                                               Executor executor) {
-                                                               up.getExecutor()
-                                                                 .execute(i, hash, tx, onComplete, executor);
+                                                                               @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
+                                                               up.getExecutor().execute(i, hash, tx, onComplete);
                                                            }
 
                                                            @Override

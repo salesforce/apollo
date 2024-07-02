@@ -2,6 +2,7 @@ package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.utils.Entropy;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
 import java.util.List;
@@ -231,7 +232,7 @@ public class DelegatedContext<T extends Member> implements Context<T> {
 
     @Override
     public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc) {
-        return delegate.sample(range, entropy, exc);
+        return delegate.sample(range, Entropy.bitsStream(), exc);
     }
 
     @Override

@@ -16,7 +16,6 @@ import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
-import com.salesforce.apollo.choam.support.OneShot;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
@@ -32,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import java.security.PublicKey;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -45,26 +44,27 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
  * @author hal.hildebrand
  */
 public class GenesisAssembly implements Genesis {
-    private static final Logger                log                = LoggerFactory.getLogger(GenesisAssembly.class);
-    private final        Ethereal              controller;
-    private final        ChRbcGossip           coordinator;
-    private final        SignedViewMember      genesisMember;
-    private final        Map<Digest, Member>   nextAssembly;
-    private final        AtomicBoolean         published          = new AtomicBoolean();
-    private final        Map<Digest, Join>     slate              = new ConcurrentHashMap<>();
-    private final        AtomicBoolean         started            = new AtomicBoolean();
-    private final        Transitions           transitions;
-    private final        ViewContext           view;
-    private final        Map<Member, Validate> witnesses          = new ConcurrentHashMap<>();
-    private final        OneShot               ds;
-    private final        List<Validate>        pendingValidations = new ArrayList<>();
-    private volatile     Thread                blockingThread;
-    private volatile     HashedBlock           reconfiguration;
+    private static final Logger                    log                = LoggerFactory.getLogger(GenesisAssembly.class);
+    private final        Ethereal                  controller;
+    private final        ChRbcGossip               coordinator;
+    private final        SignedViewMember          genesisMember;
+    private final        Map<Digest, Member>       nextAssembly;
+    private final        AtomicBoolean             published          = new AtomicBoolean();
+    private final        Map<Digest, Join>         slate              = new ConcurrentHashMap<>();
+    private final        AtomicBoolean             started            = new AtomicBoolean();
+    private final        Transitions               transitions;
+    private final        ViewContext               view;
+    private final        Map<Member, Validate>     witnesses          = new ConcurrentHashMap<>();
+    private final        BlockingDeque<ByteString> ds;
+    private final        List<Validate>            pendingValidations = new ArrayList<>();
+    private final        ScheduledExecutorService  scheduler;
+    private volatile     HashedBlock               reconfiguration;
 
     public GenesisAssembly(ViewContext vc, CommonCommunications<Terminal, ?> comms, SignedViewMember genesisMember,
-                           String label) {
+                           String label, ScheduledExecutorService scheduler) {
         view = vc;
-        ds = new OneShot();
+        this.scheduler = scheduler;
+        ds = new LinkedBlockingDeque<>(1024);
         Digest hash = view.context().getId();
         nextAssembly = ((Set<Member>) ((Context<? super Member>) view.pendingViews().last().context()).bftSubset(
         hash)).stream().collect(Collectors.toMap(Member::getId, m -> m));
@@ -99,7 +99,8 @@ public class GenesisAssembly implements Genesis {
                                   transitions::process, transitions::nextEpoch, label);
         coordinator = new ChRbcGossip(reContext.getId(), params().member(), nextAssembly.values(),
                                       controller.processor(), params().communications(),
-                                      params().metrics() == null ? null : params().metrics().getGensisMetrics());
+                                      params().metrics() == null ? null : params().metrics().getGensisMetrics(),
+                                      scheduler);
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   reContext.getId(), nextAssembly.keySet(), params().member().getId());
     }
@@ -117,7 +118,7 @@ public class GenesisAssembly implements Genesis {
         var validate = view.generateValidation(reconfiguration);
         log.debug("Certifying genesis block: {} for: {} slate: {} on: {}", reconfiguration.hash, view.context().getId(),
                   slate.keySet().stream().sorted().toList(), params().member().getId());
-        ds.setValue(validate.toByteString());
+        ds.add(validate.toByteString());
         witnesses.put(params().member(), validate);
         pendingValidations.forEach(v -> certify(v));
     }
@@ -140,7 +141,7 @@ public class GenesisAssembly implements Genesis {
         var join = Join.newBuilder().setMember(genesisMember).setKerl(params().kerl().get()).build();
         slate.put(params().member().getId(), join);
 
-        ds.setValue(join.toByteString());
+        ds.add(join.toByteString());
         coordinator.start(params().producer().gossipDuration());
         controller.start();
     }
@@ -230,11 +231,6 @@ public class GenesisAssembly implements Genesis {
         log.trace("Stopping genesis assembly: {} on: {}", view.context().getId(), params().member().getId());
         coordinator.stop();
         controller.stop();
-        final var cur = blockingThread;
-        blockingThread = null;
-        if (cur != null) {
-            cur.interrupt();
-        }
     }
 
     private void certify(Validate v) {
@@ -262,11 +258,11 @@ public class GenesisAssembly implements Genesis {
                 return ByteString.EMPTY;
             }
             try {
-                blockingThread = Thread.currentThread();
-                final var take = ds.get();
-                return take;
-            } finally {
-                blockingThread = null;
+                var data = ds.poll(100, TimeUnit.MILLISECONDS);
+                return data == null ? ByteString.EMPTY : data;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
             }
         };
     }

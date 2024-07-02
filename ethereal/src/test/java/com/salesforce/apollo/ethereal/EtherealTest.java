@@ -34,6 +34,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
@@ -137,7 +138,8 @@ public class EtherealTest {
             }, "Test: " + i);
 
             var gossiper = new ChRbcGossip(context.getId(), (SigningMember) member, members, controller.processor(),
-                                           com, metrics);
+                                           com, metrics,
+                                           Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
             gossipers.add(gossiper);
             dataSources.add(ds);
             controllers.add(controller);
@@ -265,7 +267,8 @@ public class EtherealTest {
             }, "Test: " + i);
 
             var gossiper = new ChRbcGossip(context.getId(), (SigningMember) member, members, controller.processor(),
-                                           com, metrics);
+                                           com, metrics,
+                                           Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
             gossipers.add(gossiper);
             dataSources.add(ds);
             controllers.add(controller);

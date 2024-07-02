@@ -60,7 +60,6 @@ import java.sql.*;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -599,12 +598,11 @@ public class SqlStateMachine {
     }
 
     @SuppressWarnings("unchecked")
-    private void complete(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Object results,
-                          Executor executor) {
+    private void complete(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Object results) {
         if (onCompletion == null) {
             return;
         }
-        onCompletion.completeAsync(() -> results, executor);
+        onCompletion.completeAsync(() -> results);
     }
 
     private void dropAll(Drop drop) throws LiquibaseException {
@@ -634,7 +632,7 @@ public class SqlStateMachine {
     }
 
     private void execute(int index, Digest txnHash, Txn tx,
-                         @SuppressWarnings("rawtypes") CompletableFuture onCompletion, Executor executor) {
+                         @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
         log.debug("executing: {} on: {}", tx.getExecutionCase(), id);
         var executing = executingBlock.get();
         updateCurrent(executing.height, executing.blkHash, index, txnHash);
@@ -652,7 +650,7 @@ public class SqlStateMachine {
                 case MIGRATION -> acceptMigration(tx.getMigration());
                 default -> null;
             };
-            this.complete(onCompletion, results, executor);
+            this.complete(onCompletion, results);
         } catch (JdbcSQLNonTransientConnectionException e) {
             // ignore
         } catch (Exception e) {
@@ -981,7 +979,7 @@ public class SqlStateMachine {
 
         @Override
         public void execute(int index, Digest txnHash, Transaction tx,
-                            @SuppressWarnings("rawtypes") CompletableFuture onComplete, Executor executor) {
+                            @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
             boolean closed;
             try {
                 closed = connection().isClosed();
@@ -1000,9 +998,8 @@ public class SqlStateMachine {
                 return;
             }
             withContext(() -> {
-                SqlStateMachine.this.execute(index, txnHash, txn, onComplete, executor);
+                SqlStateMachine.this.execute(index, txnHash, txn, onComplete);
             });
-
         }
 
         @Override
@@ -1014,7 +1011,7 @@ public class SqlStateMachine {
             });
             int i = 0;
             for (Transaction txn : initialization) {
-                execute(i, Digest.NONE, txn, null, r -> r.run());
+                execute(i, Digest.NONE, txn, null);
             }
             log.debug("Genesis executed on: {}", id);
         }

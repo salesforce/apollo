@@ -120,7 +120,7 @@ public class UpdaterTest {
                               .toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(0, Digest.NONE, transaction, null, r -> r.run());
+        updater.getExecutor().execute(0, Digest.NONE, transaction, null);
 
         ResultSet books = statement.executeQuery("select * from books");
         assertTrue(books.first());

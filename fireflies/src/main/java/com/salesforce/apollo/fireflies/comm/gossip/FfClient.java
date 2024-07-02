@@ -10,10 +10,7 @@ import com.codahale.metrics.Timer.Context;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
-import com.salesforce.apollo.fireflies.proto.FirefliesGrpc;
-import com.salesforce.apollo.fireflies.proto.Gossip;
-import com.salesforce.apollo.fireflies.proto.SayWhat;
-import com.salesforce.apollo.fireflies.proto.State;
+import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -43,6 +40,12 @@ public class FfClient implements Fireflies {
     }
 
     @Override
+    public Void enjoin(Join join) {
+        channel.wrap(FirefliesGrpc.newFutureStub(channel)).enjoin(join);
+        return null;
+    }
+
+    @Override
     public Member getMember() {
         return channel.getMember();
     }
@@ -61,10 +64,6 @@ public class FfClient implements Fireflies {
             metrics.gossipResponse().update(serializedSize);
         }
         return result;
-    }
-
-    public void release() {
-        close();
     }
 
     @Override

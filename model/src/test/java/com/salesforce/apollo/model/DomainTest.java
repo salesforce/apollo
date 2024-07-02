@@ -249,7 +249,8 @@ public class DomainTest {
             var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofMinutes(1),
                                                                      "jdbc:h2:mem:%s-state;DB_CLOSE_DELAY=-1".formatted(
                                                                      d), checkpointDirBase, Duration.ofMillis(10),
-                                                                     0.00125, Duration.ofMinutes(1), 3, 10, 0.1);
+                                                                     0.00125, Duration.ofMinutes(1), 3,
+                                                                     Duration.ofMillis(100), 10, 0.1);
             var domain = new ProcessDomain(group, member, pdParams, params.clone(), RuntimeParameters.newBuilder()
                                                                                                      .setFoundation(
                                                                                                      sealed)

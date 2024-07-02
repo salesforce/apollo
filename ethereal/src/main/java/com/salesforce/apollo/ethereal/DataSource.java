@@ -10,8 +10,8 @@ import com.google.protobuf.ByteString;
 
 /**
  * @author hal.hildebrand
- *
  */
+@FunctionalInterface
 public interface DataSource {
 
     ByteString getData();

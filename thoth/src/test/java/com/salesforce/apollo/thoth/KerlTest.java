@@ -60,10 +60,10 @@ public class KerlTest extends AbstractDhtTest {
         ControlledIdentifier<? extends Identifier> delegated = opti2;
 
         // identifier
-        assertTrue(delegated.getIdentifier() instanceof SelfAddressingIdentifier);
+        assertInstanceOf(SelfAddressingIdentifier.class, delegated.getIdentifier());
         var sap = (SelfAddressingIdentifier) delegated.getIdentifier();
         assertEquals(DigestAlgorithm.DEFAULT, sap.getDigest().getAlgorithm());
-        assertEquals("092126af01f80ca28e7a99bbdce229c029be3bbfcb791e29ccb7a64e8019a36f",
+        assertEquals("6000b1b611a2a6cb27b6c569c056cf56e04da4905168020fc054d133181d379b",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) delegated.getSigningThreshold()).getThreshold());
