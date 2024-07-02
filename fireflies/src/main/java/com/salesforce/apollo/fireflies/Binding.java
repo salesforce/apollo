@@ -253,12 +253,13 @@ class Binding {
             return false;
         }
         if (fs.isEmpty()) {
-            log.warn("No gateway returned from: {} on: {}", member.getId(), node.getId());
+            log.warn("No gateway returned from: {} on: {}", member == null ? "<null>" : member.getId(), node.getId());
             dec(complete, remaining);
             return true;
         }
         if (gateway.isDone()) {
-            log.warn("gateway is complete, ignoring from: {} on: {}", member.getId(), node.getId());
+            log.warn("gateway is complete, ignoring from: {} on: {}", member == null ? "<null>" : member.getId(),
+                     node.getId());
             complete.complete(true);
             return false;
         }

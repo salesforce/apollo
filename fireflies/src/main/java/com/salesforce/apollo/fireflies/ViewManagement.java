@@ -489,7 +489,7 @@ public class ViewManagement {
             }
         }
         var change = context.offlineCount() > 0 || !joins.isEmpty();
-        var shouldChange = isObserver() || view.hasMajorityObservervations(bootstrap);
+        var shouldChange = isObserver() || view.hasMajorityObservations(bootstrap);
         if (change && shouldChange) {
             initiateViewChange();
         } else {

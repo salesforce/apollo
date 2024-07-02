@@ -362,7 +362,6 @@ public class View {
             HashMultiset<Ballot> ballots = HashMultiset.create();
             observations.values().forEach(svu -> tally(svu, ballots));
             viewManagement.clearVote();
-            scheduleClearObservations();
             var max = ballots.entrySet()
                              .stream()
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
@@ -372,13 +371,15 @@ public class View {
                          viewManagement.cardinality(), currentView(), node.getId());
                 viewManagement.install(max.getElement());
                 scheduleViewChange();
+                scheduleClearObservations();
             } else {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
                 log.info("View consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
                          max == null ? 0 : max.getCount(), majority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).toList(), currentView(), node.getId());
-                viewManagement.initiateViewChange();
+                observations.clear();
+                scheduleViewChange();
             }
         });
     }
@@ -392,7 +393,7 @@ public class View {
         return node;
     }
 
-    boolean hasMajorityObservervations(boolean bootstrap) {
+    boolean hasMajorityObservations(boolean bootstrap) {
         return bootstrap && context.size() == 1 || observations.size() >= context.majority();
     }
 

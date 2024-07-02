@@ -28,7 +28,6 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -59,7 +58,6 @@ public class ViewAssembly {
     private final        CompletableFuture<Vue>        onConsensus;
     private final        AtomicInteger                 countdown     = new AtomicInteger();
     private final        List<SignedViewMember>        pendingJoins  = new CopyOnWriteArrayList<>();
-    private final        AtomicBoolean                 started       = new AtomicBoolean(false);
     private final        Map<Digest, SignedJoin>       joins         = new ConcurrentHashMap<>();
     private volatile     Vue                           selected;
 
@@ -100,23 +98,10 @@ public class ViewAssembly {
     }
 
     public void start() {
-        if (!started.compareAndSet(false, true)) {
-            return;
-        }
         transitions.fsm().enterStartState();
     }
 
     void assemble(List<Assemblies> asses) {
-        if (!started.get()) {
-            if (!asses.isEmpty()) {
-                var viewz = asses.stream().flatMap(a -> a.getViewsList().stream()).toList();
-                var joinz = asses.stream().flatMap(a -> a.getJoinsList().stream()).toList();
-                log.debug("Not started, ignoring assemblies: {} joins: {} views: {} on: {}", asses.size(), joinz.size(),
-                          viewz.size(), params().member().getId());
-            }
-            return;
-        }
-
         if (asses.isEmpty()) {
             return;
         }
@@ -204,9 +189,6 @@ public class ViewAssembly {
     }
 
     void join(List<SignedViewMember> joins) {
-        if (!started.get()) {
-            return;
-        }
         if (selected == null) {
             pendingJoins.addAll(joins);
             log.trace("Pending joins: {} on: {}", joins.size(), params().member().getId());
@@ -473,7 +455,6 @@ public class ViewAssembly {
         @Override
         public void finish() {
             countdown.set(-1);
-            started.set(false);
         }
 
         @Override

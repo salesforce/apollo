@@ -76,37 +76,36 @@ import static io.grpc.Status.INVALID_ARGUMENT;
 public class CHOAM {
     private static final Logger log = LoggerFactory.getLogger(CHOAM.class);
 
-    private final Map<ULong, CheckpointState>                           cachedCheckpoints     = new ConcurrentHashMap<>();
-    private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
-    private final ReliableBroadcaster                                   combine;
-    private final CommonCommunications<Terminal, Concierge>             comm;
-    private final AtomicReference<Committee>                            current               = new AtomicReference<>();
-    private final AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
-    private final AtomicReference<ScheduledFuture<?>>                   futureSynchronization = new AtomicReference<>();
-    private final AtomicReference<HashedCertifiedBlock>                 genesis               = new AtomicReference<>();
-    private final AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
-    private final AtomicReference<nextView>                             next                  = new AtomicReference<>();
-    private final AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
-    private final Parameters                                            params;
-    private final PriorityBlockingQueue<HashedCertifiedBlock>           pending               = new PriorityBlockingQueue<>();
-    private final RoundScheduler                                        roundScheduler;
-    private final Session                                               session;
-    private final AtomicBoolean                                         started               = new AtomicBoolean();
-    private final Store                                                 store;
-    private final CommonCommunications<TxnSubmission, Submitter>        submissionComm;
-    private final Combine.Transitions                                   transitions;
-    private final TransSubmission                                       txnSubmission         = new TransSubmission();
-    private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
-    private final PendingViews                                          pendingViews          = new PendingViews();
-    private final ScheduledExecutorService                              scheduler;
-    private final ExecutorService                                       linear;
-    private final AtomicBoolean                                         ongoingJoin           = new AtomicBoolean();
+    private final    Map<ULong, CheckpointState>                           cachedCheckpoints     = new ConcurrentHashMap<>();
+    private final    AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
+    private final    ReliableBroadcaster                                   combine;
+    private final    CommonCommunications<Terminal, Concierge>             comm;
+    private final    AtomicReference<Committee>                            current               = new AtomicReference<>();
+    private final    AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
+    private final    AtomicReference<ScheduledFuture<?>>                   futureSynchronization = new AtomicReference<>();
+    private final    AtomicReference<HashedCertifiedBlock>                 genesis               = new AtomicReference<>();
+    private final    AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
+    private final    AtomicReference<nextView>                             next                  = new AtomicReference<>();
+    private final    AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
+    private final    Parameters                                            params;
+    private final    PriorityBlockingQueue<HashedCertifiedBlock>           pending               = new PriorityBlockingQueue<>();
+    private final    RoundScheduler                                        roundScheduler;
+    private final    Session                                               session;
+    private final    AtomicBoolean                                         started               = new AtomicBoolean();
+    private final    Store                                                 store;
+    private final    CommonCommunications<TxnSubmission, Submitter>        submissionComm;
+    private final    Combine.Transitions                                   transitions;
+    private final    TransSubmission                                       txnSubmission         = new TransSubmission();
+    private final    AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
+    private final    PendingViews                                          pendingViews          = new PendingViews();
+    private final    ScheduledExecutorService                              scheduler;
+    private final    AtomicBoolean                                         ongoingJoin           = new AtomicBoolean();
+    private volatile Thread                                                linear;
 
     public CHOAM(Parameters params) {
         scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
         this.params = params;
-        linear = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         pendingViews.add(params.context().getId(), params.context().delegate());
 
         rotateViewKeys();
@@ -353,7 +352,11 @@ public class CHOAM {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        linear.shutdown();
+        var l = linear;
+        linear = null;
+        if (l != null) {
+            l.interrupt();
+        }
         try {
             scheduler.shutdownNow();
         } catch (Throwable e) {
@@ -434,39 +437,6 @@ public class CHOAM {
         return block;
     }
 
-    private void combine() {
-        var next = pending.peek();
-        log.trace("Attempting to combine blocks, peek: {} height: {}, head: {} height: {} on: {}",
-                  next == null ? "<null>" : next.hash, next == null ? "-1" : next.height(), head.get().hash,
-                  head.get().height(), params.member().getId());
-        while (next != null) {
-            final HashedCertifiedBlock h = head.get();
-            if (h.height() != null && next.height().compareTo(h.height()) <= 0) {
-                pending.poll();
-            } else if (isNext(next)) {
-                if (current.get().validate(next)) {
-                    HashedCertifiedBlock nextBlock = pending.poll();
-                    if (nextBlock == null) {
-                        return;
-                    }
-                    accept(nextBlock);
-                } else {
-                    log.debug("Unable to validate block: {} hash: {} height: {} on: {}", next.block.getBodyCase(),
-                              next.hash, next.height(), params.member().getId());
-                    pending.poll();
-                }
-            } else {
-                log.trace("Premature block: {} : {} height: {} current: {} on: {}", next.block.getBodyCase(), next.hash,
-                          next.height(), h.height(), params.member().getId());
-                return;
-            }
-            next = pending.peek();
-        }
-
-        log.trace("Finished combined, head: {} height: {} on: {}", head.get().hash, head.get().height(),
-                  params.member().getId());
-    }
-
     private void combine(List<Msg> messages) {
         messages.forEach(this::combine);
         transitions.combine();
@@ -542,7 +512,7 @@ public class CHOAM {
                                              checkpoint.hash, v.height(), v.hash))
                                  .setExecutions(executions)
                                  .build();
-                log.trace("Produced block: {} height: {} on: {}", block.getBodyCase(), block.getHeader().getHeight(),
+                log.trace("Produce block: {} height: {} on: {}", block.getBodyCase(), block.getHeader().getHeight(),
                           params.member().getId());
                 return block;
             }
@@ -571,6 +541,82 @@ public class CHOAM {
                 return block;
             }
         };
+    }
+
+    private void consume(HashedCertifiedBlock next) {
+        log.trace("Attempting to consume: {} hash: {} height: {}, head: {} height: {} on: {}", next.block.getBodyCase(),
+                  next.hash, next.height(), head.get().hash, head.get().height(), params.member().getId());
+        final HashedCertifiedBlock h = head.get();
+
+        if (h.height() != null && next.height().compareTo(h.height()) <= 0) {
+            // block already past tense
+            log.debug("Stale: {} hash: {} height: {} on: {}", next.block.getBodyCase(), next.hash, next.height(),
+                      params.member().getId());
+            return;
+        }
+
+        final var nlc = ULong.valueOf(next.block.getHeader().getLastReconfig());
+
+        var view = this.view.get().height();
+        if (h.block == null || nlc.equals(view)) {
+            // same view
+            consume(next, h);
+            return;
+        }
+
+        if (nlc.compareTo(view) > 0) {
+            // later view
+            log.trace("Wait for reconfiguration @ {} block: {} hash: {} height: {} current: {} on: {}",
+                      next.block.getHeader().getLastReconfig(), next.block.getBodyCase(), next.hash, next.height(),
+                      h.height(), params.member().getId());
+            pending.add(next);
+        } else {
+            // invalid view
+            log.trace("Invalid view @ {} current: {} block: {} hash: {} height: {} current: {} on: {}", nlc, view,
+                      next.block.getBodyCase(), next.hash, next.height(), h.height(), params.member().getId());
+        }
+    }
+
+    private void consume(HashedCertifiedBlock next, HashedCertifiedBlock cur) {
+        if (isNext(next)) {
+            if (current.get().validate(next)) {
+                log.trace("Accept: {} hash: {} height: {} on: {}", next.block.getBodyCase(), next.hash, next.height(),
+                          params.member().getId());
+                accept(next);
+            } else {
+                log.debug("Invalid block: {} hash: {} height: {} on: {}", next.block.getBodyCase(), next.hash,
+                          next.height(), params.member().getId());
+            }
+        } else {
+            log.trace("Premature block: {} : {} height: {} current: {} on: {}", next.block.getBodyCase(), next.hash,
+                      next.height(), cur.height(), params.member().getId());
+            pending.add(next);
+        }
+    }
+
+    private void consumer() {
+        while (started.get()) {
+            HashedCertifiedBlock next = null;
+            try {
+                next = pending.poll(500, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            if (!started.get()) {
+                return;
+            }
+            if (next == null) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                continue;
+            }
+            consume(next);
+        }
     }
 
     private void execute(List<Transaction> execs) {
@@ -1196,7 +1242,13 @@ public class CHOAM {
 
         @Override
         public void combine() {
-            linear.execute(Utils.wrapped(() -> CHOAM.this.combine(), log));
+            final var current = linear;
+            if (current == null) {
+                log.trace("Combining Consumer for: {} on: {}", context().getId(), params.member().getId());
+                linear = Thread.ofVirtual()
+                               .name("Linear[%s on: %s]".formatted(context().getId(), params.member().getId()))
+                               .start(Utils.wrapped(CHOAM.this::consumer, log));
+            }
         }
 
         @Override
