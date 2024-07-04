@@ -316,7 +316,7 @@ public class Ethereal {
         var ep = retrieveEpoch(unit);
         if (ep != null) {
             ep.adder().produce(unit);
-            log.debug("Produced: {} on: {}", unit, config.logLabel());
+            log.debug("Produced: {} {}", unit, config.logLabel());
         } else {
             log.trace("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {} on: {}",
                       unit.creator(), unit.epoch(), unit.height(), unit.level(), config.logLabel());

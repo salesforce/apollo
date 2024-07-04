@@ -320,6 +320,7 @@ public class CHOAM {
     public void rotateViewKeys(ViewChange viewChange) {
         var context = viewChange.context();
         var diadem = viewChange.diadem();
+        log.trace("Setting RBC Context to: {} on: {}", context, params.member().getId());
         ((DelegatedContext<Member>) combine.getContext()).setContext(context);
         var c = current.get();
         if (c != null) {
@@ -331,10 +332,6 @@ public class CHOAM {
             pendingViews.clear();
             pendingViews.add(diadem, context);
         }
-
-        log.info("Pushing pending view of: {}, diadem: {} size: {} on: {}", context.getId(), diadem, context.size(),
-                 params.member().getId());
-        pendingViews.add(diadem, context);
     }
 
     public void start() {

@@ -15,7 +15,6 @@ import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
-import com.salesforce.apollo.bloomFilters.BloomWindow;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -298,7 +297,7 @@ public class ReliableBroadcaster {
         }
 
         var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
-        gossiper.execute((link, ring) -> gossipRound(link, ring),
+        gossiper.execute(this::gossipRound,
                          (futureSailor, destination) -> handle(futureSailor, destination, duration, scheduler, timer));
     }
 
@@ -319,24 +318,20 @@ public class ReliableBroadcaster {
     public record Msg(List<Digest> source, ByteString content, Digest hash) {
     }
 
-    public record Parameters(int bufferSize, int maxMessages, DigestAlgorithm digestAlgorithm, double falsePositiveRate,
-                             int dedupBufferSize, double dedupFpr) {
+    public record Parameters(int bufferSize, int maxMessages, DigestAlgorithm digestAlgorithm,
+                             double falsePositiveRate) {
         public static Parameters.Builder newBuilder() {
             return new Builder();
         }
 
         public static class Builder implements Cloneable {
-            private int             bufferSize         = 1500;
-            private int             dedupBufferSize    = 100;
-            private double          dedupFpr           = Math.pow(10, -6);
-            private int             deliveredCacheSize = 100;
-            private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
-            private double          falsePositiveRate  = 0.0000125;
-            private int             maxMessages        = 500;
+            private int             bufferSize        = 1500;
+            private DigestAlgorithm digestAlgorithm   = DigestAlgorithm.DEFAULT;
+            private double          falsePositiveRate = 0.0000125;
+            private int             maxMessages       = 500;
 
             public Parameters build() {
-                return new Parameters(bufferSize, maxMessages, digestAlgorithm, falsePositiveRate, dedupBufferSize,
-                                      dedupFpr);
+                return new Parameters(bufferSize, maxMessages, digestAlgorithm, falsePositiveRate);
             }
 
             @Override
@@ -354,33 +349,6 @@ public class ReliableBroadcaster {
 
             public Parameters.Builder setBufferSize(int bufferSize) {
                 this.bufferSize = bufferSize;
-                return this;
-            }
-
-            public int getDedupBufferSize() {
-                return dedupBufferSize;
-            }
-
-            public Builder setDedupBufferSize(int dedupBufferSize) {
-                this.dedupBufferSize = dedupBufferSize;
-                return this;
-            }
-
-            public double getDedupFpr() {
-                return dedupFpr;
-            }
-
-            public Builder setDedupFpr(double dedupFpr) {
-                this.dedupFpr = dedupFpr;
-                return this;
-            }
-
-            public int getDeliveredCacheSize() {
-                return deliveredCacheSize;
-            }
-
-            public Builder setDeliveredCacheSize(int deliveredCacheSize) {
-                this.deliveredCacheSize = deliveredCacheSize;
                 return this;
             }
 
@@ -446,7 +414,6 @@ public class ReliableBroadcaster {
     }
 
     private class Buffer {
-        private final BloomWindow        delivered;
         private final Semaphore          garbageCollecting = new Semaphore(1);
         private final int                highWaterMark;
         private final int                maxAge;
@@ -457,7 +424,6 @@ public class ReliableBroadcaster {
         private Buffer(int maxAge) {
             this.maxAge = maxAge;
             highWaterMark = (params.bufferSize - (int) (params.bufferSize + ((params.bufferSize) * 0.1)));
-            delivered = BloomWindow.create(params.dedupBufferSize, params.dedupFpr, Biff.Type.DIGEST);
         }
 
         public void clear() {
@@ -466,12 +432,12 @@ public class ReliableBroadcaster {
 
         public BloomFilter<Digest> forReconcilliation() {
             var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), params.bufferSize, params.falsePositiveRate);
-            state.keySet().stream().collect(Utils.toShuffledList()).forEach(k -> biff.add(k));
+            state.keySet().stream().collect(Utils.toShuffledList()).forEach(biff::add);
             return biff;
         }
 
         public void receive(List<AgedMessage> messages) {
-            if (messages.size() == 0) {
+            if (messages.isEmpty()) {
                 return;
             }
             log.trace("receiving: {} msgs on: {}", messages.size(), member.getId());
@@ -483,13 +449,13 @@ public class ReliableBroadcaster {
                             .map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
                             .map(s -> new Msg(adapter.source.apply(s.msg.getContent()), adapter.extractor.apply(s.msg),
                                               s.hash))
-                            .filter(m -> delivered.add(m.hash))
                             .toList());
             gc();
         }
 
         public Iterable<? extends AgedMessage> reconcile(BloomFilter<Digest> biff, Digest from) {
-            PriorityQueue<AgedMessage.Builder> mailBox = new PriorityQueue<>(Comparator.comparingInt(s -> s.getAge()));
+            PriorityQueue<AgedMessage.Builder> mailBox = new PriorityQueue<>(
+            Comparator.comparingInt(AgedMessage.Builder::getAge));
             state.values()
                  .stream()
                  .collect(Utils.toShuffledList())
@@ -497,7 +463,7 @@ public class ReliableBroadcaster {
                  .filter(s -> !biff.contains(s.hash))
                  .filter(s -> s.msg.getAge() < maxAge)
                  .forEach(s -> mailBox.add(s.msg));
-            List<AgedMessage> reconciled = mailBox.stream().map(b -> b.build()).toList();
+            List<AgedMessage> reconciled = mailBox.stream().map(AgedMessage.Builder::build).toList();
             if (!reconciled.isEmpty()) {
                 log.trace("reconciled: {} for: {} on: {}", reconciled.size(), from, member.getId());
             }
@@ -565,7 +531,7 @@ public class ReliableBroadcaster {
                 //                log.trace("duplicate event: {} on: {}", s.hash, member.getId());
                 return true;
             }
-            return delivered.contains(s.hash);
+            return false;
         }
 
         private void gc() {
@@ -596,9 +562,7 @@ public class ReliableBroadcaster {
             Queue<state> candidates = new PriorityQueue<>(
             Collections.reverseOrder((a, b) -> Integer.compare(a.msg.getAge(), b.msg.getAge())));
             candidates.addAll(state.values());
-            var processing = candidates.iterator();
-            while (processing.hasNext()) {
-                var m = processing.next();
+            for (ReliableBroadcaster.state m : candidates) {
                 if (m.msg.getAge() > maxAge) {
                     state.remove(m.hash);
                 } else {

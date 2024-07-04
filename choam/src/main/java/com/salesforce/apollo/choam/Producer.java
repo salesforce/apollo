@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -57,6 +58,8 @@ public class Producer {
     private final        ViewAssembly                 assembly;
     private final        int                          maxEpoch;
     private final        AtomicBoolean                assembled          = new AtomicBoolean(false);
+    private final        AtomicInteger                epoch              = new AtomicInteger(-1);
+    private final        AtomicInteger                preblocks          = new AtomicInteger();
 
     public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint, String label,
                     ScheduledExecutorService scheduler) {
@@ -203,9 +206,10 @@ public class Producer {
     }
 
     private void create(List<ByteString> preblock, boolean last) {
+        var count = preblocks.incrementAndGet();
         if (log.isDebugEnabled()) {
-            log.debug("emit last: {} preblock: {} on: {}", last,
-                      preblock.stream().map(DigestAlgorithm.DEFAULT::digest).toList(), params().member().getId());
+            log.debug("emit #{} epoch: {} hashes: {} last: {} on: {}", count, epoch,
+                      preblock.stream().map(DigestAlgorithm.DEFAULT::digest).toList(), last, params().member().getId());
         }
         var aggregate = aggregate(preblock);
         processAssemblies(aggregate);
@@ -220,18 +224,19 @@ public class Producer {
         return view.context().getId();
     }
 
-    private void newEpoch(Integer epoch) {
+    private void newEpoch(Integer e) {
         serialize.execute(Utils.wrapped(() -> {
-            log.trace("new epoch: {} on: {}", epoch, params().member().getId());
+            this.epoch.set(e);
+            log.trace("new epoch: {} preblocks: {} on: {}", e, preblocks.get(), params().member().getId());
             assembly.newEpoch();
-            var last = epoch >= maxEpoch && assembled.get();
+            var last = e >= maxEpoch && assembled.get();
             if (last) {
                 controller.completeIt();
                 Producer.this.transitions.viewComplete();
             } else {
                 ds.reset();
             }
-            transitions.newEpoch(epoch, last);
+            transitions.newEpoch(e, last);
         }, log));
     }
 
