@@ -147,7 +147,7 @@ public class MembershipTests {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(10_000)
                                                               .setEthereal(Config.newBuilder()
-                                                                                 .setEpochLength(7)
+                                                                                 .setEpochLength(11)
                                                                                  .setNumberOfEpochs(3))
                                                               .build())
                                .setGenerateGenesis(true)

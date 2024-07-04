@@ -41,7 +41,7 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
 
         private int              bias            = 3;
         private DigestAlgorithm  digestAlgorithm = DigestAlgorithm.DEFAULT;
-        private int              epochLength     = 30;
+        private int              epochLength     = 11;
         private double           fpr             = 0.00125;
         private String           label           = "";
         private short            nProc;
@@ -64,6 +64,9 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
+            if (epochLength <= 10) {
+                throw new IllegalArgumentException("Epoch length must be at least 11: " + epochLength);
+            }
             return new Config(label, nProc, epochLength, pid, signer, digestAlgorithm, numberOfEpochs, wtk, bias, fpr);
         }
 

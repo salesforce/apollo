@@ -83,7 +83,7 @@ public class DynamicTest {
                                                                            .setMaxBatchCount(10_000)
                                                                            .setEthereal(Config.newBuilder()
                                                                                               .setNumberOfEpochs(3)
-                                                                                              .setEpochLength(7))
+                                                                                              .setEpochLength(11))
                                                                            .build())
                                  .setCheckpointBlockDelta(checkpointBlockSize);
 

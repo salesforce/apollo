@@ -70,16 +70,14 @@ public class TxDataSource implements DataSource {
     public ByteString getData() {
         var builder = UnitData.newBuilder();
         if (!draining.get()) {
-            if (processing.size() > 0 || (validations.isEmpty() || assemblies.isEmpty())) {
-                try {
-                    var batch = processing.take(batchInterval);
-                    if (batch != null) {
-                        builder.addAllTransactions(batch);
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return ByteString.EMPTY;
+            try {
+                var batch = processing.take(batchInterval);
+                if (batch != null) {
+                    builder.addAllTransactions(batch);
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return ByteString.EMPTY;
             }
         }
         var r = new ArrayList<Assemblies>();
@@ -100,7 +98,7 @@ public class TxDataSource implements DataSource {
                     break;
                 }
                 try {
-                    Thread.sleep(10);
+                    Thread.sleep(1);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
