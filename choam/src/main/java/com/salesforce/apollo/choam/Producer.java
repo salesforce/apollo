@@ -75,7 +75,7 @@ public class Producer {
 
         // Number of rounds we can provide data for
         final var blocks = ep.getEpochLength() - 2;
-        maxEpoch = ep.getEpochLength();
+        maxEpoch = ep.getNumberOfEpochs();
 
         ds = new TxDataSource(params.member(), blocks, params.metrics(), producerParams.maxBatchByteSize(),
                               producerParams.batchInterval(), producerParams.maxBatchCount());
