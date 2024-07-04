@@ -449,17 +449,19 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector) {
+        var delegate = ring(0).successor(key, test);
+        if (delegate == null) {
+            return;
+        }
         for (int ring = 0; ring < rings.length; ring++) {
-            T successor = ring(ring).successor(key, m -> !collector.contains(m) && test.test(m));
+            StaticRing r = ring(ring);
+            T successor = r.successor(hashFor(delegate, r.index), m -> !collector.contains(m) && test.test(m));
             if (successor != null) {
                 collector.add(successor);
+            } else {
+                collector.add(delegate);
             }
         }
-    }
-
-    @Override
-    public void uniqueSuccessors(Digest key, Set<T> collector) {
-        uniqueSuccessors(key, t -> true, collector);
     }
 
     @Override

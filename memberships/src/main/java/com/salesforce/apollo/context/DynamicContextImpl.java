@@ -726,21 +726,22 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     }
 
     /**
-     * @return the list of successor to the key on each ring that pass the provided predicate test
+     * @return the list of successor to the key on each ring that passes the provided predicate test
      */
     @Override
     public void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector) {
+        var delegate = ring(0).successor(key, test);
+        if (delegate == null) {
+            return;
+        }
         for (Ring<T> ring : rings) {
-            T successor = ring.successor(key, m -> !collector.contains(m) && test.test(m));
+            T successor = ring.successor(hashFor(delegate, ring.index), m -> !collector.contains(m) && test.test(m));
             if (successor != null) {
                 collector.add(successor);
+            } else {
+                collector.add(delegate);
             }
         }
-    }
-
-    @Override
-    public void uniqueSuccessors(Digest key, Set<T> collector) {
-        uniqueSuccessors(key, t -> true, collector);
     }
 
     @Override
@@ -1150,7 +1151,6 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         }
 
         /**
-         * @param start
          * @param predicate
          * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but
          * excluding) the first item where predicate(item) evaluates to True.
@@ -1160,7 +1160,6 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         }
 
         /**
-         * @param start
          * @param predicate
          * @return a list of all items counter-clock wise in the ring from (but excluding) start item to (but excluding)
          * the first item where predicate(item) evaluates to True.
@@ -1170,7 +1169,6 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         }
 
         /**
-         * @param start
          * @param predicate
          * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but
          * excluding) the first item where predicate(item) evaluates to True.
@@ -1180,7 +1178,6 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         }
 
         /**
-         * @param start
          * @param predicate
          * @return a Stream of all items counter-clock wise in the ring from (but excluding) start item to (but
          * excluding) the first item where predicate(item) evaluates to True.
@@ -1190,8 +1187,6 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         }
 
         /**
-         * @param start
-         * @param predicate
          * @return a iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
          * excluding) the first item where predicate(item) evaluates to True.
          */
@@ -1219,7 +1214,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         /**
          * @param m         - the member
          * @param predicate - the test predicate
-         * @return the first successor of m for which predicate evaluates to True. m is never evaluated..
+         * @return the first successor of m for which predicate evaluates to True. m is never evaluated.
          */
         public T successor(T m, Predicate<T> predicate) {
             return succ(hash(m), predicate);

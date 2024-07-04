@@ -34,7 +34,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     final         SigningMember                 member;
     private final CommonCommunications<Comm, ?> comm;
     private final Lock                          lock           = new ReentrantLock();
-    private final List<iteration<T>>            traversalOrder = new ArrayList<>();
+    private final List<Context.iteration<T>>    traversalOrder = new ArrayList<>();
     protected     boolean                       noDuplicates   = true;
     volatile      int                           currentIndex   = -1;
     private       boolean                       ignoreSelf;
@@ -140,31 +140,23 @@ public class RingCommunications<T extends Member, Comm extends Link> {
             return null;
         }
         final var current = currentIndex;
-        iteration<T> successor = null;
+        Context.iteration<T> successor = null;
         try {
             successor = traversalOrder.get(current);
-            final Comm link = comm.connect(successor.m);
+            final Comm link = comm.connect(successor.m());
             if (link == null) {
-                log.trace("No connection to {} on: {}", successor.m == null ? "<null>" : successor.m.getId(),
+                log.trace("No connection to {} on: {}", successor.m() == null ? "<null>" : successor.m().getId(),
                           member.getId());
             }
-            return new Destination<>(successor.m, link, successor.ring);
+            return new Destination<>(successor.m(), link, successor.ring());
         } catch (Throwable e) {
-            log.trace("error opening connection to {}: {} on: {}", successor.m == null ? "<null>" : successor.m.getId(),
+            log.trace("error opening connection to {}: {} on: {}",
+                      successor.m() == null ? "<null>" : successor.m().getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage(), member.getId());
-            return new Destination<>(successor.m, null, successor.ring);
+            return new Destination<>(successor.m(), null, successor.ring());
         }
     }
 
     public record Destination<M, Q>(M member, Q link, int ring) {
-    }
-
-    public record iteration<T extends Member>(T m, int ring) {
-
-        @Override
-        public String toString() {
-            return String.format("[%s,%s]", m == null ? "<null>" : m.getId(), ring);
-        }
-
     }
 }

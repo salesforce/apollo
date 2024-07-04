@@ -10,7 +10,6 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Util;
-import com.salesforce.apollo.ring.RingCommunications;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
 import java.util.*;
@@ -106,19 +105,19 @@ public interface Context<T extends Member> {
 
     /**
      * @param hash - the point on the rings to determine successors
-     * @return the Set of Members constructed from the sucessors of the supplied hash on each of the receiver Context's
+     * @return the Set of Members constructed from the successors of the supplied hash on each of the receiver Context's
      * rings
      */
-    default LinkedHashSet<T> bftSubset(Digest hash) {
+    default SequencedSet<T> bftSubset(Digest hash) {
         return bftSubset(hash, m -> true);
     }
 
     /**
      * @param hash   - the point on the rings to determine successors
      * @param filter - the filter to apply to successors
-     * @return the Set of Members constructed from the sucessors of the supplied hash on each of the receiver Context's
+     * @return the Set of Members constructed from the successors of the supplied hash on each of the receiver Context's
      */
-    default LinkedHashSet<T> bftSubset(Digest hash, Predicate<T> filter) {
+    default SequencedSet<T> bftSubset(Digest hash, Predicate<T> filter) {
         var collector = new LinkedHashSet<T>();
         uniqueSuccessors(hash, filter, collector);
         return collector;
@@ -437,12 +436,12 @@ public interface Context<T extends Member> {
 
     Iterable<T> successors(int ring, Digest location);
 
-    default List<RingCommunications.iteration<T>> successors(Digest digest, T ignore, boolean noDuplicates, T member) {
-        var traversal = new ArrayList<RingCommunications.iteration<T>>();
+    default List<iteration<T>> successors(Digest digest, T ignore, boolean noDuplicates, T member) {
+        var traversal = new ArrayList<iteration<T>>();
         var traversed = new TreeSet<T>();
         for (int ring = 0; ring < getRingCount(); ring++) {
             if (size() == 1) {
-                traversal.add(new RingCommunications.iteration<>(member, ring));
+                traversal.add(new iteration<>(member, ring));
                 continue;
             }
             T successor = findSuccessor(ring, digest, m -> {
@@ -458,7 +457,7 @@ public interface Context<T extends Member> {
                 }
                 return Context.IterateResult.SUCCESS;
             });
-            traversal.add(new RingCommunications.iteration<>(successor, ring));
+            traversal.add(new iteration<>(successor, ring));
         }
         return traversal;
     }
@@ -502,16 +501,12 @@ public interface Context<T extends Member> {
      */
     void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector);
 
-    default Set<T> uniqueSuccessors(Digest digest) {
-        var collected = new HashSet<T>();
-        uniqueSuccessors(digest, collected);
-        return collected;
-    }
-
     /**
      * collect the list of successors to the key on each ring, providing a unique member per ring if possible.
      */
-    void uniqueSuccessors(Digest key, Set<T> collector);
+    default void uniqueSuccessors(Digest key, Set<T> collector) {
+        uniqueSuccessors(key, t -> true, collector);
+    }
 
     boolean validRing(int ring);
 
@@ -520,6 +515,15 @@ public interface Context<T extends Member> {
      **/
     enum IterateResult {
         CONTINUE, FAIL, SUCCESS
+    }
+
+    record iteration<T extends Member>(T m, int ring) {
+
+        @Override
+        public String toString() {
+            return String.format("[%s,%s]", m == null ? "<null>" : m.getId(), ring);
+        }
+
     }
 
     /**

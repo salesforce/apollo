@@ -69,13 +69,6 @@ public class TxDataSource implements DataSource {
     @Override
     public ByteString getData() {
         var builder = UnitData.newBuilder();
-        var r = new ArrayList<Assemblies>();
-        assemblies.drainTo(r);
-        builder.addAllAssemblies(r);
-
-        var v = new ArrayList<Validate>();
-        validations.drainTo(v);
-        builder.addAllValidations(v);
         if (!draining.get()) {
             if (processing.size() > 0 || (validations.isEmpty() || assemblies.isEmpty())) {
                 try {
@@ -86,6 +79,30 @@ public class TxDataSource implements DataSource {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return ByteString.EMPTY;
+                }
+            }
+        }
+        var r = new ArrayList<Assemblies>();
+        assemblies.drainTo(r);
+        builder.addAllAssemblies(r);
+
+        var v = new ArrayList<Validate>();
+        validations.drainTo(v);
+        builder.addAllValidations(v);
+        if (draining.get() && r.isEmpty() && v.isEmpty()) {
+            var target = System.currentTimeMillis() + batchInterval.toMillis();
+            while (System.currentTimeMillis() < target) {
+                assemblies.drainTo(r);
+                validations.drainTo(v);
+                builder.addAllAssemblies(r);
+                builder.addAllValidations(v);
+                if (!v.isEmpty() || !r.isEmpty()) {
+                    break;
+                }
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 }
             }
         }
