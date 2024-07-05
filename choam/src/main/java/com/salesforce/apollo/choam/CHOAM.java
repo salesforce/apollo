@@ -561,7 +561,7 @@ public class CHOAM {
             return;
         }
 
-        if (nlc.compareTo(view) > 0) {
+        if (view != null && nlc.compareTo(view) > 0) {
             // later view
             log.trace("Wait for reconfiguration @ {} block: {} hash: {} height: {} current: {} on: {}",
                       next.block.getHeader().getLastReconfig(), next.block.getBodyCase(), next.hash, next.height(),
@@ -575,8 +575,15 @@ public class CHOAM {
     }
 
     private void consume(HashedCertifiedBlock next, HashedCertifiedBlock cur) {
+        if (next == null) {
+            return;
+        }
+        final var h = head.get();
         if (isNext(next)) {
-            if (current.get().validate(next)) {
+            if (!h.hash.equals(next.getPrevious())) {
+                log.debug("Invalid previous: {} expecting: {} block: {} hash: {} height: {} on: {}", next.getPrevious(),
+                          h.hash, next.block.getBodyCase(), next.hash, next.height(), params.member().getId());
+            } else if (current.get().validate(next)) {
                 log.trace("Accept: {} hash: {} height: {} on: {}", next.block.getBodyCase(), next.hash, next.height(),
                           params.member().getId());
                 accept(next);
@@ -584,10 +591,13 @@ public class CHOAM {
                 log.debug("Invalid block: {} hash: {} height: {} on: {}", next.block.getBodyCase(), next.hash,
                           next.height(), params.member().getId());
             }
-        } else {
+        } else if (h.height().compareTo(next.height()) > 0) {
             log.trace("Premature block: {} : {} height: {} current: {} on: {}", next.block.getBodyCase(), next.hash,
                       next.height(), cur.height(), params.member().getId());
             pending.add(next);
+        } else {
+            log.trace("Stale block: {} : {} height: {} current: {} on: {}", next.block.getBodyCase(), next.hash,
+                      next.height(), cur.height(), params.member().getId());
         }
     }
 
@@ -677,20 +687,11 @@ public class CHOAM {
     }
 
     private boolean isNext(HashedBlock next) {
-        if (next == null) {
-            return false;
-        }
         final var h = head.get();
         if (h.height() == null && next.height().equals(ULong.valueOf(0))) {
             return true;
         }
-        final Digest prev = next.getPrevious();
-        var isNext = h.hash.equals(prev);
-        if (!isNext) {
-            log.info("isNext: false previous: {} block: {} hash: {} height: {} current: {} height: {} on: {}", prev,
-                     next.block.getBodyCase(), next.hash, next.height(), h.hash, h.height(), params.member().getId());
-        }
-        return isNext;
+        return next.height().equals(h.height().add(1));
     }
 
     private void join(SignedViewMember nextView, Digest from) {
