@@ -33,6 +33,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
@@ -107,7 +108,7 @@ public class BootstrapperTest {
                                                                                                       context)
                                                                                                       .setMember(member)
                                                                                                       .build()), store,
-                                             comms);
+                                             comms, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
 
         CompletableFuture<SynchronizedState> syncFuture = boot.synchronize();
         SynchronizedState state = syncFuture.get(10, TimeUnit.SECONDS);

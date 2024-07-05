@@ -15,6 +15,7 @@ package fireflies;
 service Fireflies {
   rpc gossip (SayWhat) returns (Gossip) {}
   rpc update (State) returns (google.protobuf.Empty) {}
+  rpc enjoin (Join) returns (google.protobuf.Empty) {}
 }
 
 message SayWhat {

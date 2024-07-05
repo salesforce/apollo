@@ -183,11 +183,13 @@ public class MtlsTest {
         System.out.println("Stoping views");
         views.forEach(view -> view.stop());
 
-        ConsoleReporter.forRegistry(node0Registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+        if (Boolean.getBoolean("reportMetrics")) {
+            ConsoleReporter.forRegistry(node0Registry)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
+        }
     }
 
     private Function<Member, ClientContextSupplier> clientContextSupplier() {

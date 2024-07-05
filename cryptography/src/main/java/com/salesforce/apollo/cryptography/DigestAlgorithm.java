@@ -222,7 +222,12 @@ public enum DigestAlgorithm {
 
         @Override
         public int digestLength() {
-            return 0;
+            return 8;
+        }
+
+        @Override
+        public int longLength() {
+            return 1;
         }
 
         @Override
@@ -237,12 +242,12 @@ public enum DigestAlgorithm {
 
         @Override
         public byte[] hashOf(byte[] bytes, int len) {
-            return EMPTY;
+            return EMPTY_BYTES;
         }
 
         @Override
         public byte[] hashOf(InputStream is) {
-            return EMPTY;
+            return EMPTY_BYTES;
         }
     }, SHA2_256 {
         @Override
@@ -316,7 +321,8 @@ public enum DigestAlgorithm {
 
     public static final  DigestAlgorithm          DEFAULT           = BLAKE2B_256;
     public static final  long                     MAX_UNSIGNED_LONG = -1L;
-    private static final byte[]                   EMPTY             = new byte[0];
+    public static final  long[]                   EMPTY             = new long[] { 0L };
+    public static final  byte[]                   EMPTY_BYTES       = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 };
     private static final long[]                   LAST_32           = new long[4];
     private static final long[]                   LAST_64           = new long[8];
     private static final ThreadLocal<DigestCache> MESSAGE_DIGEST    = ThreadLocal.withInitial(() -> new DigestCache());

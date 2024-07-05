@@ -19,10 +19,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -170,8 +167,12 @@ public class SliceIterator<Comm extends Link> {
                 }
             }
             log.trace("Proceeding for: <{}> on: {}", label, member.getId());
-            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(proceed, log)), frequency.toNanos(),
-                               TimeUnit.NANOSECONDS);
+            try {
+                scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(proceed, log)), frequency.toNanos(),
+                                   TimeUnit.NANOSECONDS);
+            } catch (RejectedExecutionException e) {
+                // ignore
+            }
         } else {
             log.trace("Termination for: <{}> on: {}", label, member.getId());
         }

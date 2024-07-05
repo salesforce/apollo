@@ -30,6 +30,7 @@ import org.jooq.DSLContext;
 import org.jooq.Record1;
 import org.jooq.SQLDialect;
 import org.jooq.exception.DataAccessException;
+import org.jooq.exception.IntegrityConstraintViolationException;
 import org.jooq.impl.DSL;
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -43,6 +44,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.salesforce.apollo.stereotomy.db.UniKERL.compress;
+import static com.salesforce.apollo.stereotomy.db.UniKERL.decompress;
 import static com.salesforce.apollo.stereotomy.schema.tables.Coordinates.COORDINATES;
 import static com.salesforce.apollo.stereotomy.schema.tables.Event.EVENT;
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
@@ -51,6 +54,7 @@ import static com.salesforce.apollo.thoth.schema.tables.PendingAttachment.PENDIN
 import static com.salesforce.apollo.thoth.schema.tables.PendingCoordinates.PENDING_COORDINATES;
 import static com.salesforce.apollo.thoth.schema.tables.PendingEvent.PENDING_EVENT;
 import static com.salesforce.apollo.thoth.schema.tables.PendingValidations.PENDING_VALIDATIONS;
+import static com.salesforce.apollo.utils.Utils.b64;
 
 /**
  * Represents the replicated KERL logic
@@ -61,23 +65,26 @@ public class KerlSpace {
     private static final Logger             log = LoggerFactory.getLogger(KerlSpace.class);
     private final        JdbcConnectionPool connectionPool;
     private final        Digest             member;
+    private final        DigestAlgorithm    algorithm;
 
-    public KerlSpace(JdbcConnectionPool connectionPool, Digest member) {
+    public KerlSpace(JdbcConnectionPool connectionPool, Digest member, DigestAlgorithm algorithm) {
         this.connectionPool = connectionPool;
         this.member = member;
+        this.algorithm = algorithm;
     }
 
     public static void upsert(DSLContext dsl, EventCoords coordinates, Attachment attachment, Digest member) {
-        final var identBytes = coordinates.getIdentifier().toByteArray();
+        final var identBytes = b64(coordinates.getIdentifier());
 
         var ident = dsl.newRecord(IDENTIFIER);
         ident.setPrefix(identBytes);
         ident.merge();
 
         Record1<Long> id;
+        var coords = b64(Digest.from(coordinates.getDigest()).getBytes());
         try {
             id = dsl.insertInto(PENDING_COORDINATES)
-                    .set(PENDING_COORDINATES.DIGEST, coordinates.getDigest().toByteArray())
+                    .set(PENDING_COORDINATES.DIGEST, coords)
                     .set(PENDING_COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                     .set(PENDING_COORDINATES.ILK, coordinates.getIlk())
@@ -85,14 +92,14 @@ public class KerlSpace {
                          ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger())
                     .returningResult(PENDING_COORDINATES.ID)
                     .fetchOne();
-        } catch (DataAccessException e) {
+        } catch (IntegrityConstraintViolationException e) {
             // Already exists
             id = dsl.select(PENDING_COORDINATES.ID)
                     .from(PENDING_COORDINATES)
                     .join(IDENTIFIER)
-                    .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
+                    .on(IDENTIFIER.PREFIX.eq(identBytes))
                     .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                    .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                    .and(PENDING_COORDINATES.DIGEST.eq(coords))
                     .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(
                     ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger()))
                     .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
@@ -100,14 +107,14 @@ public class KerlSpace {
         }
         var vRec = dsl.newRecord(PENDING_ATTACHMENT);
         vRec.setCoordinates(id.value1());
-        vRec.setAttachment(attachment.toByteArray());
+        vRec.setAttachment(b64(attachment.toByteArray()));
         vRec.insert();
     }
 
     public static void upsert(DSLContext context, KeyEvent event, DigestAlgorithm digestAlgorithm, Digest member) {
         final EventCoordinates prevCoords = event.getPrevious();
 
-        final var identBytes = event.getIdentifier().toIdent().toByteArray();
+        final var identBytes = b64(event.getIdentifier().toIdent());
 
         context.mergeInto(IDENTIFIER)
                .using(context.selectOne())
@@ -116,9 +123,10 @@ public class KerlSpace {
                .values(identBytes)
                .execute();
         long id;
+        var prev = b64(prevCoords.getDigest().getBytes());
         try {
             id = context.insertInto(PENDING_COORDINATES)
-                        .set(PENDING_COORDINATES.DIGEST, prevCoords.getDigest().toDigeste().toByteArray())
+                        .set(PENDING_COORDINATES.DIGEST, prev)
                         .set(PENDING_COORDINATES.IDENTIFIER,
                              context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                         .set(PENDING_COORDINATES.ILK, event.getIlk())
@@ -126,27 +134,31 @@ public class KerlSpace {
                         .returningResult(PENDING_COORDINATES.ID)
                         .fetchOne()
                         .value1();
-        } catch (DataAccessException e) {
+        } catch (IntegrityConstraintViolationException e) {
             // Already exists
             var coordinates = event.getCoordinates();
-            id = context.select(PENDING_COORDINATES.ID)
-                        .from(PENDING_COORDINATES)
-                        .join(IDENTIFIER)
-                        .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
-                        .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                        .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                        .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
-                        .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
-                        .fetchOne()
-                        .value1();
+            var result = context.select(PENDING_COORDINATES.ID)
+                                .from(PENDING_COORDINATES)
+                                .join(IDENTIFIER)
+                                .on(IDENTIFIER.PREFIX.eq(identBytes))
+                                .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                                .and(PENDING_COORDINATES.DIGEST.eq(prev))
+                                .and(
+                                PENDING_COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
+                                .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
+                                .fetchOne();
+            if (result == null) {
+                throw new IllegalStateException("upsert failed", e);
+            }
+            id = result.value1();
         }
 
         final var digest = event.hash(digestAlgorithm);
         try {
             context.insertInto(PENDING_EVENT)
                    .set(PENDING_EVENT.COORDINATES, id)
-                   .set(PENDING_EVENT.DIGEST, digest.toDigeste().toByteArray())
-                   .set(PENDING_EVENT.EVENT, event.getBytes())
+                   .set(PENDING_EVENT.DIGEST, b64(digest.getBytes()))
+                   .set(PENDING_EVENT.EVENT, compress(event.getBytes()))
                    .execute();
         } catch (DataAccessException e) {
         }
@@ -157,7 +169,7 @@ public class KerlSpace {
         final var logCoords = EventCoordinates.from(coordinates);
         final var logIdentifier = Identifier.from(coordinates.getIdentifier());
         log.trace("Upserting validations for: {} on: {}", logCoords, member);
-        final var identBytes = coordinates.getIdentifier().toByteArray();
+        final var identBytes = b64(coordinates.getIdentifier());
 
         try {
             dsl.mergeInto(IDENTIFIER)
@@ -171,9 +183,10 @@ public class KerlSpace {
         }
 
         Record1<Long> id;
+        var d = b64(Digest.from(coordinates.getDigest()).getBytes());
         try {
             id = dsl.insertInto(PENDING_COORDINATES)
-                    .set(PENDING_COORDINATES.DIGEST, coordinates.getDigest().toByteArray())
+                    .set(PENDING_COORDINATES.DIGEST, d)
                     .set(PENDING_COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                     .set(PENDING_COORDINATES.ILK, coordinates.getIlk())
@@ -188,9 +201,9 @@ public class KerlSpace {
             id = dsl.select(PENDING_COORDINATES.ID)
                     .from(PENDING_COORDINATES)
                     .join(IDENTIFIER)
-                    .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
+                    .on(IDENTIFIER.PREFIX.eq(identBytes))
                     .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                    .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                    .and(PENDING_COORDINATES.DIGEST.eq(d))
                     .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(
                     ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger()))
                     .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
@@ -202,7 +215,7 @@ public class KerlSpace {
         }
         var vRec = dsl.newRecord(PENDING_VALIDATIONS);
         vRec.setCoordinates(id.value1());
-        vRec.setValidations(validations.toByteArray());
+        vRec.setValidations(b64(validations));
         vRec.insert();
     }
 
@@ -318,7 +331,7 @@ public class KerlSpace {
                .orderBy(PENDING_COORDINATES.SEQUENCE_NUMBER)
                .fetchStream()
                .forEach(r -> {
-                   KeyEvent event = ProtobufEventFactory.toKeyEvent(r.value2(), r.value3());
+                   KeyEvent event = ProtobufEventFactory.toKeyEvent(decompress(r.value2()), r.value3());
                    EventCoordinates coordinates = event.getCoordinates();
                    if (coordinates != null) {
                        context.select(PENDING_ATTACHMENT.ATTACHMENT)
@@ -327,7 +340,7 @@ public class KerlSpace {
                               .stream()
                               .forEach(bytes -> {
                                   try {
-                                      Attachment attach = Attachment.parseFrom(bytes.value1());
+                                      Attachment attach = Attachment.parseFrom(b64(bytes.value1()));
                                       kerl.append(Collections.singletonList(new AttachmentEventImpl(
                                       AttachmentEvent.newBuilder()
                                                      .setCoordinates(coordinates.toEventCoords())
@@ -343,7 +356,7 @@ public class KerlSpace {
                               .stream()
                               .forEach(bytes -> {
                                   try {
-                                      Validations attach = Validations.parseFrom(bytes.value1());
+                                      Validations attach = Validations.parseFrom(b64(bytes.value1()));
                                       kerl.appendValidations(coordinates, attach.getValidationsList()
                                                                                 .stream()
                                                                                 .collect(Collectors.toMap(
@@ -391,6 +404,8 @@ public class KerlSpace {
     }
 
     private Stream<Digest> eventDigestsIn(KeyInterval interval, DSLContext dsl) {
+        var begin = b64(interval.getBegin().getBytes());
+        var end = b64(interval.getEnd().getBytes());
         return Stream.concat(dsl.select(EVENT.DIGEST)
                                 .from(EVENT)
                                 .join(COORDINATES)
@@ -399,36 +414,29 @@ public class KerlSpace {
                                 .on(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                                 .join(IDENTIFIER_LOCATION_HASH)
                                 .on(IDENTIFIER.ID.eq(IDENTIFIER_LOCATION_HASH.IDENTIFIER))
-                                .where(IDENTIFIER_LOCATION_HASH.DIGEST.ge(interval.getBegin().getBytes()))
-                                .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(interval.getEnd().getBytes()))
+                                .where(IDENTIFIER_LOCATION_HASH.DIGEST.ge(begin))
+                                .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(end))
                                 .stream()
-                                .map(r -> {
-                                    try {
-                                        return Digest.from(Digeste.parseFrom(r.value1()));
-                                    } catch (InvalidProtocolBufferException e) {
-                                        return null;
-                                    }
-                                })
-                                .filter(d -> d != null), dsl.select(PENDING_EVENT.DIGEST)
-                                                            .from(PENDING_EVENT)
-                                                            .join(PENDING_COORDINATES)
-                                                            .on(PENDING_EVENT.COORDINATES.eq(PENDING_COORDINATES.ID))
-                                                            .join(IDENTIFIER)
-                                                            .on(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                                                            .join(IDENTIFIER_LOCATION_HASH)
-                                                            .on(IDENTIFIER.ID.eq(IDENTIFIER_LOCATION_HASH.IDENTIFIER))
-                                                            .where(IDENTIFIER_LOCATION_HASH.DIGEST.ge(
-                                                            interval.getBegin().getBytes()))
-                                                            .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(
-                                                            interval.getEnd().getBytes()))
-                                                            .stream()
-                                                            .map(r -> {
-                                                                try {
-                                                                    return Digest.from(Digeste.parseFrom(r.value1()));
-                                                                } catch (InvalidProtocolBufferException e) {
-                                                                    return null;
-                                                                }
-                                                            })
-                                                            .filter(d -> d != null));
+                                .map(r -> new Digest(algorithm, b64(r.value1())))
+                                .filter(Objects::nonNull), dsl.select(PENDING_EVENT.DIGEST)
+                                                              .from(PENDING_EVENT)
+                                                              .join(PENDING_COORDINATES)
+                                                              .on(PENDING_EVENT.COORDINATES.eq(PENDING_COORDINATES.ID))
+                                                              .join(IDENTIFIER)
+                                                              .on(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                                                              .join(IDENTIFIER_LOCATION_HASH)
+                                                              .on(IDENTIFIER.ID.eq(IDENTIFIER_LOCATION_HASH.IDENTIFIER))
+                                                              .where(IDENTIFIER_LOCATION_HASH.DIGEST.ge(begin))
+                                                              .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(end))
+                                                              .stream()
+                                                              .map(r -> {
+                                                                  try {
+                                                                      return Digest.from(
+                                                                      Digeste.parseFrom(b64(r.value1())));
+                                                                  } catch (InvalidProtocolBufferException e) {
+                                                                      return null;
+                                                                  }
+                                                              })
+                                                              .filter(Objects::nonNull));
     }
 }

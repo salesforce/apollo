@@ -204,12 +204,14 @@ public class SwarmTest {
         }
         communications.forEach(e -> e.close(Duration.ofSeconds(1)));
         views.forEach(view -> view.stop());
-        System.out.println("Node 0 metrics");
-        ConsoleReporter.forRegistry(node0Registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+        if (Boolean.getBoolean("reportMetrics")) {
+            System.out.println("Node 0 metrics");
+            ConsoleReporter.forRegistry(node0Registry)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
+        }
     }
 
     private void initialize() {

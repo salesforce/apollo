@@ -15,6 +15,7 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
+import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.MockMember;
 import io.grpc.StatusRuntimeException;
@@ -35,6 +36,8 @@ public interface Committee {
 
     static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context, Digest member,
                                               Logger log) {
+        assert Dag.validate(reconfigure.getJoinsCount()) : "Reconfigure joins: %s is not BFT".formatted(
+        reconfigure.getJoinsCount());
         var validators = reconfigure.getJoinsList().stream().collect(Collectors.toMap(e -> {
             var id = new Digest(e.getMember().getVm().getId());
             var m = context.getMember(id);
@@ -47,7 +50,6 @@ public interface Committee {
         }, e -> {
             var vm = e.getMember().getVm();
             if (vm.hasConsensusKey()) {
-
                 return new DefaultVerifier(publicKey(vm.getConsensusKey()));
             } else {
                 log.info("No member for validator: {}, returning mock on: {}", Digest.from(vm.getId()), member);

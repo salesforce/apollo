@@ -40,6 +40,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -175,7 +176,8 @@ public class GenesisAssemblyTest {
                                       .setVm(vm)
                                       .setSignature(((SigningMember) m).sign(vm.toByteString()).toSig())
                                       .build();
-            genii.put(m, new GenesisAssembly(view, comms.get(m), svm, m.getId().toString()));
+            genii.put(m, new GenesisAssembly(view, comms.get(m), svm, m.getId().toString(),
+                                             Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
         });
 
         try {

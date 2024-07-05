@@ -15,8 +15,8 @@ import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
-import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.ViewChange;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
@@ -40,7 +40,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -201,7 +201,8 @@ public class FireFliesTrace {
                                                                      Duration.ofMinutes(1),
                                                                      "jdbc:h2:mem:%s-dht".formatted(digest),
                                                                      checkpointDirBase, Duration.ofMillis(10), 0.00125,
-                                                                     Duration.ofMinutes(1), 3, 10, 0.1);
+                                                                     Duration.ofMinutes(1), 3, Duration.ofMillis(100),
+                                                                     10, 0.1);
             var node = new ProcessContainerDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()
                                                                                                     .setFoundation(
                                                                                                     sealed)
@@ -223,17 +224,17 @@ public class FireFliesTrace {
         final var seeds = Collections.singletonList(
         new Seed(domains.getFirst().getMember().getIdentifier().getIdentifier(), EndpointProvider.allocatePort()));
         domains.forEach(d -> {
-            BiConsumer<Context, Digest> c = (context, viewId) -> {
-                if (context.cardinality() == CARDINALITY) {
-                    System.out.printf("Full view: %s members: %s on: %s%n", viewId, context.cardinality(),
-                                      d.getMember().getId());
+            Consumer<ViewChange> c = viewChange -> {
+                if (viewChange.context().cardinality() == CARDINALITY) {
+                    System.out.printf("Full view: %s members: %s on: %s%n", viewChange.diadem(),
+                                      viewChange.context().cardinality(), d.getMember().getId());
                     countdown.countDown();
                 } else {
-                    System.out.printf("Members joining: %s members: %s on: %s%n", viewId, context.cardinality(),
-                                      d.getMember().getId());
+                    System.out.printf("Members joining: %s members: %s on: %s%n", viewChange.diadem(),
+                                      viewChange.context().cardinality(), d.getMember().getId());
                 }
             };
-            d.getFoundation().register(c);
+            d.getFoundation().register("foo", c);
         });
         // start seed
         final var started = new AtomicReference<>(new CountDownLatch(1));

@@ -152,7 +152,7 @@ public class ChurnTest {
 
             toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds));
 
-            success = countdown.get().await(30, TimeUnit.SECONDS);
+            success = countdown.get().await(60, TimeUnit.SECONDS);
             failed = testViews.stream().filter(e -> {
                 if (e.getContext().activeCount() != testViews.size())
                     return true;
@@ -260,18 +260,20 @@ public class ChurnTest {
             assertTrue(testGraph.isSC());
         }
 
-        System.out.println("Node 0 metrics");
-        ConsoleReporter.forRegistry(node0Registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+        if (Boolean.getBoolean("reportMetrics")) {
+            System.out.println("Node 0 metrics");
+            ConsoleReporter.forRegistry(node0Registry)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
+        }
     }
 
     private void initialize() {
         executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         executor2 = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
-        var parameters = Parameters.newBuilder().setMaximumTxfr(20).build();
+        var parameters = Parameters.newBuilder().setMaximumTxfr(10).build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 

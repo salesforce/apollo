@@ -1,5 +1,6 @@
 package com.salesforce.apollo.utils;
 
+import com.google.protobuf.MessageLite;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
@@ -18,17 +19,30 @@ import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
+import static java.util.stream.Collectors.toList;
 
 /**
  * @author hal.hildebrand
  **/
 public class Utils {
+
+    private static final Collector<?, ?, ?> SHUFFLER = Collectors.collectingAndThen(
+    Collectors.toCollection(ArrayList::new), list -> {
+        Collections.shuffle(list);
+        return list;
+    });
 
     /**
      * Copy the contents of the input stream to the output stream. It is the caller's responsibility to close the
@@ -65,6 +79,18 @@ public class Utils {
                 throw new IllegalStateException(String.format("Cannot delete [%s] ", directoryOrFile));
             }
         }
+    }
+
+    public static String b64(byte[] bytes) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    public static String b64(MessageLite message) {
+        return b64(message.toByteArray());
+    }
+
+    public static byte[] b64(String encoded) {
+        return Base64.getUrlDecoder().decode(encoded);
     }
 
     /**
@@ -156,6 +182,11 @@ public class Utils {
         String.format("CN=%s, L=%s, UID=%s, DC=%s", host, port, qb64(digest), qb64(signingKey)));
     }
 
+    @SuppressWarnings("unchecked")
+    public static <T> Collector<T, ?, List<T>> toShuffledList() {
+        return (Collector<T, ?, List<T>>) SHUFFLER;
+    }
+
     /**
      * Find a free port for any local address
      *
@@ -163,6 +194,13 @@ public class Utils {
      */
     public static int allocatePort() {
         return allocatePort(null);
+    }
+
+    public static <T> Collector<T, ?, Stream<T>> toEagerShuffledStream() {
+        return Collectors.collectingAndThen(toList(), list -> {
+            Collections.shuffle(list);
+            return list.stream();
+        });
     }
 
     /**

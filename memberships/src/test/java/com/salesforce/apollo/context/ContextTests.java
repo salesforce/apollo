@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.SequencedSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -25,6 +26,30 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * @author hal.hildebrand
  */
 public class ContextTests {
+
+    @Test
+    public void bftSubset() throws Exception {
+        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
+        List<SigningMember> members = new ArrayList<>();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+
+        for (int i = 0; i < 7; i++) {
+            SigningMember m = new ControlledIdentifierMember(stereotomy.newIdentifier());
+            members.add(m);
+            context.activate(m);
+        }
+        var testEntropy = SecureRandom.getInstance("SHA1PRNG");
+        testEntropy.setSeed(new byte[] { 6, 6, 6 });
+        var algo = DigestAlgorithm.DEFAULT;
+        List<SequencedSet<Member>> subsets = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            var subset = context.bftSubset(algo.random(testEntropy));
+            System.out.println(subset.stream().map(Member::getId).toList());
+            subsets.add(subset);
+        }
+    }
 
     @Test
     public void consistency() throws Exception {
@@ -41,11 +66,11 @@ public class ContextTests {
         }
 
         List<Member> predecessors = context.predecessors(members.get(0));
-        assertEquals(predecessors.get(2), members.get(9));
+        assertEquals(predecessors.get(2), members.get(3));
 
         List<Member> successors = context.successors(members.get(1));
-        assertEquals(members.get(0), successors.get(0));
-        assertEquals(members.get(1), context.successor(1, members.get(0)));
+        assertEquals(members.get(8), successors.get(0));
+        assertEquals(members.get(9), context.successor(1, members.get(0)));
     }
 
     @Test

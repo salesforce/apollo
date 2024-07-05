@@ -6,19 +6,18 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.SigningThreshold;
+import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import org.joou.ULong;
+
 import java.security.PublicKey;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-
-import org.joou.ULong;
-
-import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.SigningThreshold;
-import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
-import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * The state of a key in the KEL

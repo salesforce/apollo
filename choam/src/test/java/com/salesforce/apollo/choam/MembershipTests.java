@@ -147,7 +147,7 @@ public class MembershipTests {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(10_000)
                                                               .setEthereal(Config.newBuilder()
-                                                                                 .setEpochLength(7)
+                                                                                 .setEpochLength(11)
                                                                                  .setNumberOfEpochs(3))
                                                               .build())
                                .setGenerateGenesis(true)
@@ -183,9 +183,9 @@ public class MembershipTests {
     }
 
     private CHOAM constructCHOAM(SigningMember m, Parameters.Builder params, boolean testSubject) {
-        final TransactionExecutor processor = (index, hash, t, f, executor) -> {
+        final TransactionExecutor processor = (_, _, _, f) -> {
             if (f != null) {
-                f.completeAsync(Object::new, executor);
+                f.completeAsync(Object::new);
             }
         };
         params.getProducer().ethereal().setSigner(m);

@@ -41,11 +41,6 @@ public interface Driven {
             public Transitions assembled() {
                 return SPICE;
             }
-
-            @Override
-            public Transitions newEpoch(int epoch, boolean lastEpoch) {
-                return lastEpoch ? PROTOCOL_FAILURE : null;
-            }
         }, CHECKPOINTING {
             @Entry
             public void check() {
@@ -117,11 +112,6 @@ public interface Driven {
             }
         }, SPICE {
             @Override
-            public Transitions newEpoch(int epoch, boolean lastEpoch) {
-                return lastEpoch ? PROTOCOL_FAILURE : null;
-            }
-
-            @Override
             public Transitions viewComplete() {
                 return END_EPOCHS;
             }
@@ -157,7 +147,7 @@ public interface Driven {
         }
 
         default Transitions newEpoch(int epoch, boolean lastEpoch) {
-            throw fsm().invalidTransitionOn();
+            return null;
         }
 
         default Transitions start() {

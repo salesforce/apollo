@@ -73,7 +73,7 @@ public class Ethereal {
     }
 
     private static ThreadPoolExecutor consumer(String label) {
-        return new ThreadPoolExecutor(1, 1, 1, TimeUnit.SECONDS, new PriorityBlockingQueue<>(),
+        return new ThreadPoolExecutor(1, 1, 10, TimeUnit.MINUTES, new PriorityBlockingQueue<>(),
                                       Thread.ofVirtual().name("Ethereal Consumer[" + label + "]").factory(),
                                       (r, t) -> log.trace("Shutdown, cannot consume unit"));
     }
@@ -218,6 +218,7 @@ public class Ethereal {
         }
         log.trace("Stopping Ethereal on: {}", config.logLabel());
         completeIt();
+        consumer.shutdown();
         consumer.getQueue().clear(); // Flush any pending consumers
         creator.stop();
         epochs.values().forEach(epoch::close);
@@ -315,7 +316,7 @@ public class Ethereal {
         var ep = retrieveEpoch(unit);
         if (ep != null) {
             ep.adder().produce(unit);
-            log.debug("Produced: {} on: {}", unit, config.logLabel());
+            log.debug("Produced: {} {}", unit, config.logLabel());
         } else {
             log.trace("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {} on: {}",
                       unit.creator(), unit.epoch(), unit.height(), unit.level(), config.logLabel());
@@ -428,6 +429,5 @@ public class Ethereal {
         public void run() {
             consumer.accept(unit);
         }
-
     }
 }

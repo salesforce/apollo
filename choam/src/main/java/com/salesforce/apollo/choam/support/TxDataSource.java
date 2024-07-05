@@ -17,7 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -36,14 +35,13 @@ public class TxDataSource implements DataSource {
 
     private final static Logger log = LoggerFactory.getLogger(TxDataSource.class);
 
-    private final    Duration                   batchInterval;
-    private final    AtomicBoolean              draining    = new AtomicBoolean();
-    private final    Member                     member;
-    private final    ChoamMetrics               metrics;
-    private final    BatchingQueue<Transaction> processing;
-    private final    BlockingQueue<Assemblies>  assemblies  = new LinkedBlockingQueue<>();
-    private final    BlockingQueue<Validate>    validations = new LinkedBlockingQueue<>();
-    private volatile Thread                     blockingThread;
+    private final Duration                   batchInterval;
+    private final AtomicBoolean              draining    = new AtomicBoolean();
+    private final Member                     member;
+    private final ChoamMetrics               metrics;
+    private final BatchingQueue<Transaction> processing;
+    private final BlockingQueue<Assemblies>  assemblies  = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Validate>    validations = new LinkedBlockingQueue<>();
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
                         Duration batchInterval, int maxBatchCount) {
@@ -55,11 +53,6 @@ public class TxDataSource implements DataSource {
     }
 
     public void close() {
-        final var current = blockingThread;
-        if (current != null) {
-            current.interrupt();
-        }
-        blockingThread = null;
         if (metrics != null) {
             metrics.dropped(processing.size(), validations.size(), assemblies.size());
         }
@@ -76,70 +69,51 @@ public class TxDataSource implements DataSource {
     @Override
     public ByteString getData() {
         var builder = UnitData.newBuilder();
-        log.trace("Requesting unit data on: {}", member.getId());
-        blockingThread = Thread.currentThread();
-        try {
-            var r = new ArrayList<Assemblies>();
-            var v = new ArrayList<Validate>();
-
-            if (draining.get()) {
-                var target = Instant.now().plus(batchInterval);
-                while (target.isAfter(Instant.now()) && builder.getAssembliesCount() == 0
-                && builder.getValidationsCount() == 0) {
-                    // rinse and repeat
-                    r = new ArrayList<>();
-                    assemblies.drainTo(r);
-                    builder.addAllAssemblies(r);
-
-                    v = new ArrayList<Validate>();
-                    validations.drainTo(v);
-                    builder.addAllValidations(v);
-
-                    if (builder.getAssembliesCount() != 0 || builder.getValidationsCount() != 0) {
-                        break;
-                    }
-
-                    // sleep waiting for input
-                    try {
-                        Thread.sleep(batchInterval.dividedBy(2).toMillis());
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return ByteString.EMPTY;
-                    }
+        if (!draining.get()) {
+            try {
+                var batch = processing.take(batchInterval);
+                if (batch != null) {
+                    builder.addAllTransactions(batch);
                 }
-            } else {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return ByteString.EMPTY;
+            }
+        }
+        var r = new ArrayList<Assemblies>();
+        assemblies.drainTo(r);
+        builder.addAllAssemblies(r);
+
+        var v = new ArrayList<Validate>();
+        validations.drainTo(v);
+        builder.addAllValidations(v);
+        if (draining.get() && r.isEmpty() && v.isEmpty()) {
+            var target = System.currentTimeMillis() + batchInterval.toMillis();
+            while (System.currentTimeMillis() < target) {
+                assemblies.drainTo(r);
+                validations.drainTo(v);
+                builder.addAllAssemblies(r);
+                builder.addAllValidations(v);
+                if (!v.isEmpty() || !r.isEmpty()) {
+                    break;
+                }
                 try {
-                    var batch = processing.take(batchInterval);
-                    if (batch != null) {
-                        builder.addAllTransactions(batch);
-                    }
+                    Thread.sleep(1);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    return ByteString.EMPTY;
                 }
             }
-
-            // One more time into ye breech
-            r = new ArrayList<>();
-            assemblies.drainTo(r);
-            builder.addAllAssemblies(r);
-
-            v = new ArrayList<Validate>();
-            validations.drainTo(v);
-            builder.addAllValidations(v);
-
-            ByteString bs = builder.build().toByteString();
-            if (metrics != null) {
-                metrics.publishedBatch(builder.getTransactionsCount(), bs.size(), builder.getValidationsCount(),
-                                       builder.getAssembliesCount());
-            }
-            log.trace("Unit data: {} txns, {} validations, {} assemblies totalling: {} bytes  on: {}",
-                      builder.getTransactionsCount(), builder.getValidationsCount(), builder.getAssembliesCount(),
-                      bs.size(), member.getId());
-            return bs;
-        } finally {
-            blockingThread = null;
         }
+
+        ByteString bs = builder.build().toByteString();
+        if (metrics != null) {
+            metrics.publishedBatch(builder.getTransactionsCount(), bs.size(), builder.getValidationsCount(),
+                                   builder.getAssembliesCount());
+        }
+        log.trace("Unit data: {} txns, {} validations, {} assemblies totalling: {} bytes  on: {}",
+                  builder.getTransactionsCount(), builder.getValidationsCount(), builder.getAssembliesCount(),
+                  bs.size(), member.getId());
+        return bs;
     }
 
     public int getRemainingReassemblies() {
@@ -166,8 +140,8 @@ public class TxDataSource implements DataSource {
         }
     }
 
-    public void offer(Validate generateValidation) {
-        validations.offer(generateValidation);
+    public boolean offer(Validate generateValidation) {
+        return validations.offer(generateValidation);
     }
 
     public void reset() {

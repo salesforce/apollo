@@ -83,7 +83,7 @@ public class DynamicTest {
                                                                            .setMaxBatchCount(10_000)
                                                                            .setEthereal(Config.newBuilder()
                                                                                               .setNumberOfEpochs(3)
-                                                                                              .setEpochLength(7))
+                                                                                              .setEpochLength(11))
                                                                            .build())
                                  .setCheckpointBlockDelta(checkpointBlockSize);
 
@@ -221,7 +221,7 @@ public class DynamicTest {
     }
 
     private CHOAM constructCHOAM(SigningMember m, Parameters.Builder params, Context<Member> context) {
-        final CHOAM.TransactionExecutor processor = (index, hash, t, f, executor) -> {
+        final CHOAM.TransactionExecutor processor = (index, hash, t, f) -> {
             if (f != null) {
                 f.completeAsync(Object::new, executor);
             }

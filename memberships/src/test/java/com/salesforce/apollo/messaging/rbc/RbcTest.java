@@ -54,10 +54,7 @@ public class RbcTest {
     private static final Parameters.Builder              parameters     = Parameters.newBuilder()
                                                                                     .setMaxMessages(100)
                                                                                     .setFalsePositiveRate(0.00125)
-                                                                                    .setBufferSize(500)
-                                                                                    .setDedupBufferSize(
-                                                                                    LARGE_TESTS ? 100 * 100 : 50 * 50)
-                                                                                    .setDedupFpr(Math.pow(10, -9));
+                                                                                    .setBufferSize(500);
     final                AtomicReference<CountDownLatch> round          = new AtomicReference<>();
     private final        List<Router>                    communications = new ArrayList<>();
     private final        AtomicInteger                   totalReceived  = new AtomicInteger(0);
@@ -145,11 +142,13 @@ public class RbcTest {
 
         System.out.println();
 
-        ConsoleReporter.forRegistry(registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+        if (Boolean.getBoolean("reportMetrics")) {
+            ConsoleReporter.forRegistry(registry)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
+        }
     }
 
     class Receiver implements MessageHandler {

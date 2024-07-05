@@ -70,7 +70,7 @@ public class MigrationTest {
         executor.execute(0, Digest.NONE, Transaction.newBuilder()
                                                     .setContent(
                                                     Txn.newBuilder().setMigration(migration).build().toByteString())
-                                                    .build(), success, r -> r.run());
+                                                    .build(), success);
 
         executor.beginBlock(ULong.valueOf(1), DigestAlgorithm.DEFAULT.getOrigin().prefix("voo"));
 
@@ -80,7 +80,7 @@ public class MigrationTest {
         executor.execute(0, Digest.NONE, Transaction.newBuilder()
                                                     .setContent(
                                                     Txn.newBuilder().setMigration(migration).build().toByteString())
-                                                    .build(), success, r -> r.run());
+                                                    .build(), success);
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -101,7 +101,7 @@ public class MigrationTest {
                               .toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(0, Digest.NONE, transaction, null, r -> r.run());
+        updater.getExecutor().execute(0, Digest.NONE, transaction, null);
 
         ResultSet books = statement.executeQuery("select * from test.books");
         assertTrue(books.first());
@@ -122,7 +122,7 @@ public class MigrationTest {
         executor.execute(1, Digest.NONE, Transaction.newBuilder()
                                                     .setContent(
                                                     Txn.newBuilder().setMigration(migration).build().toByteString())
-                                                    .build(), success, r -> r.run());
+                                                    .build(), success);
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -150,7 +150,7 @@ public class MigrationTest {
         executor.execute(0, Digest.NONE, Transaction.newBuilder()
                                                     .setContent(
                                                     Txn.newBuilder().setMigration(migration).build().toByteString())
-                                                    .build(), success, r -> r.run());
+                                                    .build(), success);
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -171,7 +171,7 @@ public class MigrationTest {
                               .toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(1, Digest.NONE, transaction, null, r -> r.run());
+        updater.getExecutor().execute(1, Digest.NONE, transaction, null);
 
         ResultSet books = statement.executeQuery("select * from test.books");
         assertTrue(books.first());

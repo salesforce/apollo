@@ -13,7 +13,6 @@ import com.salesforce.apollo.protocols.EndpointMetrics;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface FireflyMetrics extends EndpointMetrics {
 
@@ -24,6 +23,8 @@ public interface FireflyMetrics extends EndpointMetrics {
     Histogram gossipReply();
 
     Histogram gossipResponse();
+
+    Timer inboundEnjoinDuration();
 
     Histogram inboundGateway();
 

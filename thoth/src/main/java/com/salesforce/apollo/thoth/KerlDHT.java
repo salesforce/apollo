@@ -85,6 +85,7 @@ import java.util.function.Supplier;
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
 import static com.salesforce.apollo.thoth.schema.Tables.IDENTIFIER_LOCATION_HASH;
+import static com.salesforce.apollo.utils.Utils.b64;
 
 /**
  * KerlDHT provides the replicated state store for KERLs
@@ -146,7 +147,7 @@ public class KerlDHT implements ProtoKERLService {
         this.connectionPool = connectionPool;
         kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
         this.reconcile = new RingCommunications<>(this.context, member, reconcileComms);
-        this.kerlSpace = new KerlSpace(connectionPool, member.getId());
+        this.kerlSpace = new KerlSpace(connectionPool, member.getId(), digestAlgorithm);
 
         initializeSchema();
         kerl = new CachingKERL(f -> {
@@ -170,7 +171,7 @@ public class KerlDHT implements ProtoKERLService {
     public static void updateLocationHash(Identifier identifier, DigestAlgorithm digestAlgorithm, DSLContext dsl) {
         dsl.transaction(config -> {
             var context = DSL.using(config);
-            var identBytes = identifier.toIdent().toByteArray();
+            var identBytes = b64(identifier.toIdent());
             // Braindead, but correct
             var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)).fetchOne();
             if (id == null) {
@@ -180,7 +181,7 @@ public class KerlDHT implements ProtoKERLService {
             var hashed = digestAlgorithm.digest(identBytes);
             context.insertInto(IDENTIFIER_LOCATION_HASH, IDENTIFIER_LOCATION_HASH.IDENTIFIER,
                                IDENTIFIER_LOCATION_HASH.DIGEST)
-                   .values(id.value1(), hashed.getBytes())
+                   .values(id.value1(), b64(hashed.getBytes()))
                    .onDuplicateKeyIgnore()
                    .execute();
         });
@@ -738,13 +739,14 @@ public class KerlDHT implements ProtoKERLService {
         }
         dhtComms.register(context.getId(), service, validator);
         reconcileComms.register(context.getId(), reconciliation, validator);
-        reconcile(scheduler, duration);
+        reconcile(duration);
     }
 
     public void stop() {
         if (!started.compareAndSet(true, false)) {
             return;
         }
+        scheduler.shutdownNow();
         dhtComms.deregister(context.getId());
         reconcileComms.deregister(context.getId());
     }
@@ -920,7 +922,7 @@ public class KerlDHT implements ProtoKERLService {
 
     private void reconcile(Optional<Update> result,
                            RingCommunications.Destination<Member, ReconciliationService> destination,
-                           ScheduledExecutorService scheduler, Duration duration) {
+                           Duration duration) {
         if (!started.get()) {
             return;
         }
@@ -938,7 +940,7 @@ public class KerlDHT implements ProtoKERLService {
             }
         }
         if (started.get()) {
-            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> reconcile(scheduler, duration), log)),
+            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> reconcile(duration), log)),
                                duration.toMillis(), TimeUnit.MILLISECONDS);
         }
     }
@@ -957,14 +959,14 @@ public class KerlDHT implements ProtoKERLService {
                                        .build());
     }
 
-    private void reconcile(ScheduledExecutorService scheduler, Duration duration) {
+    private void reconcile(Duration duration) {
         if (!started.get()) {
             return;
         }
         Thread.ofVirtual()
               .start(() -> reconcile.execute(this::reconcile,
                                              (futureSailor, destination) -> reconcile(futureSailor, destination,
-                                                                                      scheduler, duration)));
+                                                                                      duration)));
 
     }
 
