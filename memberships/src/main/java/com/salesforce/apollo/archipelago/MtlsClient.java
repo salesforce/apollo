@@ -36,7 +36,7 @@ public class MtlsClient {
 
         Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().blockOnLimit(false).build();
         channel = NettyChannelBuilder.forAddress(address)
-                                     //                                     .executor(executor)
+                                     .executor(executor)
                                      .withOption(ChannelOption.TCP_NODELAY, true)
                                      .sslContext(supplier.forClient(clientAuth, alias, validator, MtlsServer.TL_SV1_3))
                                      .intercept(new ConcurrencyLimitClientInterceptor(limiter,

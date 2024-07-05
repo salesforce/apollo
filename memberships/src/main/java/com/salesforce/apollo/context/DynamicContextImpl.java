@@ -730,16 +730,10 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
      */
     @Override
     public void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector) {
-        var delegate = ring(0).successor(key, test);
-        if (delegate == null) {
-            return;
-        }
         for (Ring<T> ring : rings) {
-            T successor = ring.successor(hashFor(delegate, ring.index), m -> !collector.contains(m) && test.test(m));
+            T successor = ring.successor(key, m -> !collector.contains(m) && test.test(m));
             if (successor != null) {
                 collector.add(successor);
-            } else {
-                collector.add(delegate);
             }
         }
     }
