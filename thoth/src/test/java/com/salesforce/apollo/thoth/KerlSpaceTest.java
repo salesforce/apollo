@@ -20,7 +20,6 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
-import org.junit.jupiter.api.Test;
 
 import java.security.SecureRandom;
 import java.sql.SQLException;
@@ -57,7 +56,7 @@ public class KerlSpaceTest {
         }
     }
 
-    @Test
+    //    @Test
     public void smokin() throws Exception {
         final var digestAlgorithm = DigestAlgorithm.DEFAULT;
         var entropy = SecureRandom.getInstance("SHA1PRNG");

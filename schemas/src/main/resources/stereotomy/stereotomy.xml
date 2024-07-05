@@ -13,7 +13,7 @@
                 <constraints nullable="false"
                              primaryKey="true" primaryKeyName="identifier_pkey"/>
             </column>
-            <column name="prefix" type="VARBINARY(1024)">
+            <column name="prefix" type="VARCHAR(1024)">
                 <constraints nullable="false"/>
             </column>
         </createTable>
@@ -31,7 +31,7 @@
             <column name="identifier" type="INT8">
                 <constraints nullable="false"/>
             </column>
-            <column name="digest" type="VARBINARY(1024)">
+            <column name="digest" type="VARCHAR(1024)">
                 <constraints nullable="false"/>
             </column>
             <column name="sequence_number" type="NUMERIC(20)">
@@ -47,7 +47,7 @@
                 coordinates_ilk_validate check (ilk in ('dip', 'drt', 'icp',
                                                         'ixn', 'nan', 'rct', 'vrc', 'rot'))
         </sql>
-        
+
 
         <addForeignKeyConstraint
                 onDelete="CASCADE" baseColumnNames="identifier"
@@ -66,13 +66,13 @@
                 <constraints nullable="false"
                              primaryKey="true"/>
             </column>
-            <column name="digest" type="VARBINARY(1024)">
+            <column name="digest" type="VARCHAR(1024)">
                 <constraints nullable="false"/>
             </column>
-            <column name="content" type="VARBINARY(8192)">
+            <column name="content" type="VARCHAR(8192)">
                 <constraints nullable="false"/>
             </column>
-            <column name="current_state" type="VARBINARY(8192)"/>
+            <column name="current_state" type="VARCHAR(8192)"/>
         </createTable>
 
         <addUniqueConstraint
@@ -117,7 +117,7 @@
                 <constraints nullable="false"
                              primaryKey="true"/>
             </column>
-            <column name="signature" type="VARBINARY(1024)">
+            <column name="signature" type="VARCHAR(1024)">
                 <constraints nullable="false"/>
             </column>
         </createTable>
@@ -134,7 +134,7 @@
             <column name="for" type="INT8">
                 <constraints nullable="false"/>
             </column>
-            <column name="seal" type="VARBINARY(4096)">
+            <column name="seal" type="VARCHAR(4096)">
                 <constraints nullable="false"/>
             </column>
         </createTable>
@@ -156,11 +156,11 @@
                 <constraints nullable="false"
                              primaryKey="true"/>
             </column>
-            <column name="validator" type="VARBINARY(1024)">
+            <column name="validator" type="VARCHAR(1024)">
                 <constraints nullable="false"
                              primaryKey="true"/>
             </column>
-            <column name="signature" type="VARBINARY(1024)">
+            <column name="signature" type="VARCHAR(1024)">
                 <constraints nullable="false"/>
             </column>
         </createTable>

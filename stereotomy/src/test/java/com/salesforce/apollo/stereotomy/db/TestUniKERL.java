@@ -44,8 +44,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * @author hal.hildebrand
  */
 public class TestUniKERL {
-    private static final SecureRandom entropy = new SecureRandom();
+    private SecureRandom entropy;
 
+    public void before() throws Exception {
+        SecureRandom entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+    }
+    
     @Test
     public void smoke() throws Exception {
         var factory = new ProtobufEventFactory();

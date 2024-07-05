@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog
-		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-		xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-		xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd">
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd">
 
     <changeSet author="hhildebrand" id="thoth-1">
         <sql>create schema if not exists thoth</sql>
@@ -12,7 +12,7 @@
             <column name="identifier" type="INT8">
                 <constraints nullable="false" primaryKey="true"/>
             </column>
-            <column name="digest" type="VARBINARY(1024)">
+            <column name="digest" type="VARCHAR(1024)">
                 <constraints nullable="false"/>
             </column>
         </createTable>
@@ -37,7 +37,7 @@
             <column name="identifier" type="INT8">
                 <constraints nullable="false"/>
             </column>
-            <column name="digest" type="VARBINARY(1024)">
+            <column name="digest" type="VARCHAR(1024)">
                 <constraints nullable="false"/>
             </column>
             <column name="sequence_number" type="NUMERIC(20)">
@@ -74,10 +74,10 @@
             <column name="coordinates" type="INT8">
                 <constraints nullable="false" primaryKey="true"/>
             </column>
-            <column name="digest" type="VARBINARY(1024)">
+            <column name="digest" type="VARCHAR(1024)">
                 <constraints nullable="false"/>
             </column>
-            <column name="event" type="VARBINARY(8192)">
+            <column name="event" type="VARCHAR(8192)">
                 <constraints nullable="false"/>
             </column>
         </createTable>
@@ -93,7 +93,7 @@
             <column name="coordinates" type="INT8">
                 <constraints nullable="false"/>
             </column>
-            <column name="attachment" type="VARBINARY(4096)">
+            <column name="attachment" type="VARCHAR(4096)">
                 <constraints nullable="false"/>
             </column>
         </createTable>
@@ -109,7 +109,7 @@
             <column name="coordinates" type="INT8">
                 <constraints nullable="false"/>
             </column>
-            <column name="validations" type="VARBINARY(4096)">
+            <column name="validations" type="VARCHAR(4096)">
                 <constraints nullable="false"/>
             </column>
         </createTable>

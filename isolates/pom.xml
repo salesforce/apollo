@@ -36,6 +36,11 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-jdk14</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.graalvm.sdk</groupId>
+            <artifactId>graal-sdk</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -257,16 +262,6 @@
                     </plugin>
                 </plugins>
             </build>
-        </profile>
-        <profile>
-            <id>isolates</id>
-            <dependencies>
-                <dependency>
-                    <groupId>org.graalvm.sdk</groupId>
-                    <artifactId>graal-sdk</artifactId>
-                    <scope>provided</scope>
-                </dependency>
-            </dependencies>
         </profile>
         <profile>
             <id>mac-domain</id>

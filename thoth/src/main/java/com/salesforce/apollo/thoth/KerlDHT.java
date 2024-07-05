@@ -85,6 +85,7 @@ import java.util.function.Supplier;
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
 import static com.salesforce.apollo.thoth.schema.Tables.IDENTIFIER_LOCATION_HASH;
+import static com.salesforce.apollo.utils.Utils.b64;
 
 /**
  * KerlDHT provides the replicated state store for KERLs
@@ -170,7 +171,7 @@ public class KerlDHT implements ProtoKERLService {
     public static void updateLocationHash(Identifier identifier, DigestAlgorithm digestAlgorithm, DSLContext dsl) {
         dsl.transaction(config -> {
             var context = DSL.using(config);
-            var identBytes = identifier.toIdent().toByteArray();
+            var identBytes = b64(identifier.toIdent());
             // Braindead, but correct
             var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)).fetchOne();
             if (id == null) {
@@ -180,7 +181,7 @@ public class KerlDHT implements ProtoKERLService {
             var hashed = digestAlgorithm.digest(identBytes);
             context.insertInto(IDENTIFIER_LOCATION_HASH, IDENTIFIER_LOCATION_HASH.IDENTIFIER,
                                IDENTIFIER_LOCATION_HASH.DIGEST)
-                   .values(id.value1(), hashed.getBytes())
+                   .values(id.value1(), b64(hashed.getBytes()))
                    .onDuplicateKeyIgnore()
                    .execute();
         });

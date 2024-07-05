@@ -1,5 +1,6 @@
 package com.salesforce.apollo.utils;
 
+import com.google.protobuf.MessageLite;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
@@ -19,6 +20,7 @@ import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -77,6 +79,18 @@ public class Utils {
                 throw new IllegalStateException(String.format("Cannot delete [%s] ", directoryOrFile));
             }
         }
+    }
+
+    public static String b64(byte[] bytes) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    public static String b64(MessageLite message) {
+        return b64(message.toByteArray());
+    }
+
+    public static byte[] b64(String encoded) {
+        return Base64.getUrlDecoder().decode(encoded);
     }
 
     /**
