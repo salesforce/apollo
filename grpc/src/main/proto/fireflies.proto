@@ -16,6 +16,11 @@ service Fireflies {
   rpc gossip (SayWhat) returns (Gossip) {}
   rpc update (State) returns (google.protobuf.Empty) {}
   rpc enjoin (Join) returns (google.protobuf.Empty) {}
+  rpc ping (Ping) returns (google.protobuf.Empty) {}
+}
+
+message Ping {
+  int32 ring = 1;
 }
 
 message SayWhat {

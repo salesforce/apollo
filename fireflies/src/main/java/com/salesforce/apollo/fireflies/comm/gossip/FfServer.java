@@ -13,10 +13,7 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
-import com.salesforce.apollo.fireflies.proto.Gossip;
-import com.salesforce.apollo.fireflies.proto.Join;
-import com.salesforce.apollo.fireflies.proto.SayWhat;
-import com.salesforce.apollo.fireflies.proto.State;
+import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -25,7 +22,6 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  */
 public class FfServer extends FirefliesImplBase {
-
     private final ClientIdentity           identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
@@ -88,6 +84,25 @@ public class FfServer extends FirefliesImplBase {
                 metrics.gossipReply().update(serializedSize);
                 timer.stop();
             }
+        });
+    }
+
+    @Override
+    public void ping(Ping request, StreamObserver<Empty> responseObserver) {
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        router.evaluate(responseObserver, s -> {
+            try {
+                s.ping(request, from);
+            } catch (StatusRuntimeException e) {
+                responseObserver.onError(e);
+                return;
+            }
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
         });
     }
 

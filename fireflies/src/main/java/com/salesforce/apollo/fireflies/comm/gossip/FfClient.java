@@ -7,11 +7,15 @@
 package com.salesforce.apollo.fireflies.comm.gossip;
 
 import com.codahale.metrics.Timer.Context;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Empty;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Member;
+
+import java.time.Duration;
 
 /**
  * @author hal.hildebrand
@@ -64,6 +68,11 @@ public class FfClient implements Fireflies {
             metrics.gossipResponse().update(serializedSize);
         }
         return result;
+    }
+
+    @Override
+    public ListenableFuture<Empty> ping(Ping ping, Duration timeout) {
+        return channel.wrap(FirefliesGrpc.newFutureStub(channel)).ping(ping);
     }
 
     @Override

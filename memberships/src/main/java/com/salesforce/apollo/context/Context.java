@@ -462,6 +462,21 @@ public interface Context<T extends Member> {
         return traversal;
     }
 
+    default List<iteration<T>> successors(Digest digest, Predicate<T> predicate, T member) {
+        var traversal = new ArrayList<iteration<T>>();
+        var traversed = new TreeSet<T>();
+        for (int ring = 0; ring < getRingCount(); ring++) {
+            if (size() == 1) {
+                traversal.add(new iteration<>(member, ring));
+                continue;
+            }
+            T successor = findSuccessor(ring, digest,
+                                        m -> predicate.test(m) ? IterateResult.SUCCESS : IterateResult.CONTINUE);
+            traversal.add(new iteration<>(successor, ring));
+        }
+        return traversal;
+    }
+
     /**
      * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
      * excluding) the first item where predicate(item) evaluates to True.

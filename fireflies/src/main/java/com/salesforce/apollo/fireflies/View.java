@@ -93,7 +93,6 @@ public class View {
     private final    CommonCommunications<Entrance, Service>     approaches;
     private final    DynamicContext<Participant>                 context;
     private final    DigestAlgorithm                             digestAlgo;
-    private final    RingCommunications<Participant, Fireflies>  gossiper;
     private final    AtomicBoolean                               introduced          = new AtomicBoolean();
     private final    Map<String, Consumer<ViewChange>>           viewChangeListeners = new HashMap<>();
     private final    Semaphore                                   viewSerialization   = new Semaphore(1);
@@ -138,9 +137,6 @@ public class View {
                                          service.getClass().getCanonicalName() + ":approach",
                                          r -> new EntranceServer(gateway.getClientIdentityProvider(), r, metrics),
                                          EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node, service));
-        gossiper = new RingCommunications<>(context, node, comm);
-        gossiper.allowDuplicates();
-        gossiper.ignoreSelf();
         this.validation = validation;
         this.verifiers = verifiers;
         viewChange = new ReentrantReadWriteLock(true);
@@ -261,6 +257,23 @@ public class View {
     @Override
     public String toString() {
         return "View[" + node.getId() + "]";
+    }
+
+    /**
+     * Accuse the member on the ring
+     *
+     * @param member
+     * @param ring
+     */
+    void accuse(Participant member, int ring, Throwable e) {
+        if (member.isAccusedOn(ring) || member.isDisabled(ring)) {
+            return; // Don't issue multiple accusations
+        }
+        member.addAccusation(node.accuse(member, ring));
+        pendingRebuttals.computeIfAbsent(member.getId(),
+                                         d -> roundTimers.schedule(() -> gc(member), params.rebuttalTimeout()));
+        log.info("Accuse: {} on ring: {} view: {} (timer started): {} on: {}", member.getId(), ring, currentView(),
+                 e.getMessage(), node.getId());
     }
 
     boolean addToView(NoteWrapper note) {
@@ -496,16 +509,10 @@ public class View {
     }
 
     void reset() {
-        // Tune
-        gossiper.reset();
         roundTimers.setRoundDuration(context.timeToLive());
 
         // Regenerate for new epoch
         node.nextNote();
-    }
-
-    void resetBootstrapView() {
-        viewManagement.resetBootstrapView();
     }
 
     void schedule(final Duration duration) {
@@ -674,23 +681,6 @@ public class View {
             return null;
         }
 
-    }
-
-    /**
-     * Accuse the member on the ring
-     *
-     * @param member
-     * @param ring
-     */
-    private void accuse(Participant member, int ring, Throwable e) {
-        if (member.isAccusedOn(ring) || member.isDisabled(ring)) {
-            return; // Don't issue multiple accusations
-        }
-        member.addAccusation(node.accuse(member, ring));
-        pendingRebuttals.computeIfAbsent(member.getId(),
-                                         d -> roundTimers.schedule(() -> gc(member), params.rebuttalTimeout()));
-        log.info("Accuse: {} on ring: {} view: {} (timer started): {} on: {}", member.getId(), ring, currentView(),
-                 e.getMessage(), node.getId());
     }
 
     /**
@@ -1066,74 +1056,63 @@ public class View {
         if (!started.get()) {
             return;
         }
-
-        if (context.activeCount() == 1) {
-            tick();
+        try {
+            var successors = context.successors(getNodeId(), context::isActive, getNode());
+            Collections.shuffle(successors);
+            successors.forEach(i -> {
+                var link = comm.connect(i.m());
+                if (link != null) {
+                    gossip(gossip(link, i.ring()), i.m(), link, i.ring());
+                }
+                try {
+                    Thread.sleep(duration.toMillis());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            if (context.activeCount() == 1) {
+                tick();
+            }
+        } finally {
+            schedule(duration);
         }
-        gossiper.execute((link, ring) -> gossip(link, ring),
-                         (result, destination) -> gossip(result, destination, duration));
     }
 
-    /**
-     * Handle the gossip response from the destination
-     *
-     * @param result
-     * @param destination
-     * @param duration
-     */
-    private void gossip(Optional<Gossip> result, RingCommunications.Destination<Participant, Fireflies> destination,
-                        Duration duration) {
+    private void gossip(Gossip gossip, Participant member, Fireflies link, int ring) {
+        if (gossip == null) {
+            return;
+        }
         try {
-            if (result.isPresent()) {
-                final var member = destination.member();
+            if (!gossip.getRedirect().equals(SignedNote.getDefaultInstance())) {
+                stable(() -> redirect(member, gossip, ring));
+            } else if (viewManagement.joined()) {
                 try {
-                    Gossip gossip = result.get();
-                    if (!gossip.getRedirect().equals(SignedNote.getDefaultInstance())) {
-                        stable(() -> redirect(member, gossip, destination.ring()));
-                    } else if (viewManagement.joined()) {
-                        try {
-                            Update update = stable(() -> response(gossip));
-                            if (update != null && !update.equals(Update.getDefaultInstance())) {
-                                log.trace("Update for: {} notes: {} accusations: {} joins: {} observations: {} on: {}",
-                                          destination.member().getId(), update.getNotesCount(),
-                                          update.getAccusationsCount(), update.getJoinsCount(),
-                                          update.getObservationsCount(), node.getId());
-                                destination.link()
-                                           .update(State.newBuilder()
-                                                        .setView(currentView().toDigeste())
-                                                        .setRing(destination.ring())
-                                                        .setUpdate(update)
-                                                        .build());
-                            }
-                        } catch (StatusRuntimeException e) {
-                            handleSRE("update", destination, member, e);
-                        }
-                    } else {
-                        stable(() -> processUpdates(gossip));
+                    Update update = stable(() -> response(gossip));
+                    if (update != null && !update.equals(Update.getDefaultInstance())) {
+                        log.trace("Update for: {} notes: {} accusations: {} joins: {} observations: {} on: {}",
+                                  member.getId(), update.getNotesCount(), update.getAccusationsCount(),
+                                  update.getJoinsCount(), update.getObservationsCount(), node.getId());
+                        link.update(
+                        State.newBuilder().setView(currentView().toDigeste()).setRing(ring).setUpdate(update).build());
                     }
-                } catch (NoSuchElementException e) {
-                    if (!viewManagement.joined()) {
-                        log.debug("Null bootstrap gossiping with: {} view: {} on: {}", member.getId(), currentView(),
-                                  node.getId());
-                    } else {
-                        if (e.getCause() instanceof StatusRuntimeException sre) {
-                            handleSRE("gossip", destination, member, sre);
-                        } else {
-                            log.debug("Exception gossiping with: {} view: {} on: {}", member.getId(), currentView(),
-                                      node.getId(), e);
-                            accuse(member, destination.ring(), e);
-                        }
-                    }
+                } catch (StatusRuntimeException e) {
+                    handleSRE("update", new RingCommunications.Destination<>(member, link, ring), member, e);
                 }
+            } else {
+                stable(() -> processUpdates(gossip));
             }
-
-        } finally {
-            try {
-                futureGossip = scheduler.schedule(
-                () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(duration), log)), duration.toNanos(),
-                TimeUnit.NANOSECONDS);
-            } catch (RejectedExecutionException e) {
-                // ignore
+        } catch (NoSuchElementException e) {
+            if (!viewManagement.joined()) {
+                log.debug("Null bootstrap gossiping with: {} view: {} on: {}", member.getId(), currentView(),
+                          node.getId());
+            } else {
+                if (e.getCause() instanceof StatusRuntimeException sre) {
+                    handleSRE("gossip", new RingCommunications.Destination<>(member, link, ring), member, sre);
+                } else {
+                    log.debug("Exception gossiping with: {} view: {} on: {}", member.getId(), currentView(),
+                              node.getId(), e);
+                    accuse(member, ring, e);
+                }
             }
         }
     }
@@ -1910,6 +1889,21 @@ public class View {
             viewManagement.join(join, from, responseObserver, timer);
         }
 
+        public void ping(Ping ping, Digest from) {
+            final var ring = ping.getRing();
+            if (!context.validRing(ring)) {
+                log.debug("invalid Ping ring: {} current: {} from: {} on: {}", ring, currentView(), from, node.getId());
+                throw new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Invalid ring"));
+            }
+            Participant member = context.getActiveMember(from);
+            Participant successor = context.successor(ring, member, m -> context.isActive(m.getId()));
+            if (successor == null || !successor.equals(node)) {
+                log.debug("Not predecessor, invalid ping from: {} on ring: {} on: {}", from, ring, node.getId());
+                throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not predecessor"));
+            }
+            // perfectly fine ping
+        }
+
         /**
          * The first message in the anti-entropy protocol. Process any digests from the inbound gossip digest. Respond
          * with the Gossip that represents the digests newer or not known in this view, as well as updates from this
@@ -1955,6 +1949,7 @@ public class View {
                 if (!successor.equals(node)) {
                     builder.setRedirect(successor.getNote().getWrapped());
                     log.debug("Redirected: {} to: {} on: {}", member.getId(), successor.id, node.getId());
+                    return builder.build();
                 }
                 g = builder.setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))
                            .setAccusations(
