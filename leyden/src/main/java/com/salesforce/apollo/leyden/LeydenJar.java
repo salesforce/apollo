@@ -57,7 +57,6 @@ public class LeydenJar {
     private final MVMap<Digest, Bound>                                                         bottled;
     private final MVMap<Digest, Digest>                                                        digests;
     private final AtomicBoolean                                                                started   = new AtomicBoolean();
-    private final RingCommunications<Member, ReconciliationClient>                             reconcile;
     private final NavigableMap<Digest, List<ConsensusState>>                                   pending   = new ConcurrentSkipListMap<>();
     private final Borders                                                                      borders;
     private final Reconciled                                                                   recon;
@@ -94,7 +93,6 @@ public class LeydenJar {
                                                                               .valueType(new BoundDatatype()));
         digests = store.openMap(DIGESTS, new MVMap.Builder<Digest, Digest>().keyType(new DigestDatatype(algorithm))
                                                                             .valueType(new DigestDatatype(algorithm)));
-        reconcile = new RingCommunications<>(this.context, member, reconComms);
     }
 
     public void bind(Binding bound) {
@@ -166,7 +164,7 @@ public class LeydenJar {
         log.info("Starting context: {}:{} on: {}", context.getId(), System.identityHashCode(context), member.getId());
         binderComms.register(context.getId(), borders, validator);
         reconComms.register(context.getId(), recon, validator);
-        reconcile(scheduler, gossip);
+        schedule(gossip, scheduler);
     }
 
     public void stop() {
@@ -361,29 +359,21 @@ public class LeydenJar {
                                        .build());
     }
 
-    private void reconcile(Optional<Update> result,
-                           RingCommunications.Destination<Member, ReconciliationClient> destination,
-                           ScheduledExecutorService scheduler, Duration duration) {
+    private void reconcile(Update update, ReconciliationClient link) {
         if (!started.get()) {
             return;
         }
-        if (result.isPresent()) {
-            try {
-                Update update = result.get();
-                log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getBindingsCount(),
-                          destination.member().getId(), member.getId());
-                update(update.getBindingsList(), destination.member().getId());
-            } catch (NoSuchElementException e) {
-                log.debug("null interval reconciliation with {} on: {}", destination.member().getId(), member.getId(),
-                          e.getCause());
-            }
-        } else {
-            log.trace("Received no events in interval reconciliation from: {} on: {}", destination.member().getId(),
+        if (update == null) {
+            log.trace("Received no events in interval reconciliation from: {} on: {}", link.getMember().getId(),
                       member.getId());
         }
-        if (started.get()) {
-            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> reconcile(scheduler, duration), log)),
-                               duration.toNanos(), TimeUnit.NANOSECONDS);
+        try {
+            log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getBindingsCount(),
+                      link.getMember().getId(), member.getId());
+            update(update.getBindingsList(), link.getMember().getId());
+        } catch (NoSuchElementException e) {
+            log.debug("null interval reconciliation with {} on: {}", link.getMember().getId(), member.getId(),
+                      e.getCause());
         }
     }
 
@@ -391,10 +381,24 @@ public class LeydenJar {
         if (!started.get()) {
             return;
         }
-        Thread.ofVirtual()
-              .start(() -> reconcile.execute(this::reconcile,
-                                             (futureSailor, destination) -> reconcile(futureSailor, destination,
-                                                                                      scheduler, duration)));
+
+        try {
+            var successors = context.successors(member.getId(), m -> true, member);
+            Collections.shuffle(successors);
+            successors.forEach(i -> {
+                var link = reconComms.connect(i.m());
+                if (link != null) {
+                    reconcile(reconcile(link, i.ring()), link);
+                }
+                try {
+                    Thread.sleep(duration.toMillis());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        } finally {
+            schedule(duration, scheduler);
+        }
     }
 
     /**
@@ -417,6 +421,11 @@ public class LeydenJar {
                  .filter(Objects::nonNull)
                  .forEach(update::addBindings);
         return update;
+    }
+
+    private void schedule(Duration duration, ScheduledExecutorService scheduler) {
+        scheduler.schedule(Utils.wrapped(() -> reconcile(scheduler, duration), log), duration.toNanos(),
+                           TimeUnit.NANOSECONDS);
     }
 
     private void update(List<Bound> bindings, Digest from) {

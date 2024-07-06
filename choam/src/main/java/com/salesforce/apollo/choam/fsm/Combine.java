@@ -70,6 +70,11 @@ public interface Combine {
             public Transitions synchronizing() {
                 return SYNCHRONIZING;
             }
+
+            @Override
+            public Transitions bootstrap(HashedCertifiedBlock anchor) {
+                return null;
+            }
         }, CHECKPOINTING {
             @Override
             public Transitions combine() {
