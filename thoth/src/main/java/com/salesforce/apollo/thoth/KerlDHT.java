@@ -24,7 +24,6 @@ import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
@@ -74,7 +73,10 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
@@ -107,7 +109,6 @@ public class KerlDHT implements ProtoKERLService {
     private final UniKERLDirectPooled                                         kerlPool;
     private final KerlSpace                                                   kerlSpace;
     private final SigningMember                                               member;
-    private final RingCommunications<Member, ReconciliationService>           reconcile;
     private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
     private final Reconcile                                                   reconciliation = new Reconcile();
     private final ScheduledExecutorService                                    scheduler;
@@ -119,6 +120,7 @@ public class KerlDHT implements ProtoKERLService {
                    BiFunction<KerlDHT, KERL.AppendKERL, KERL.AppendKERL> wrap, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, Duration operationTimeout,
                    double falsePositiveRate, StereotomyMetrics metrics) {
+        assert member != null;
         this.context = new DelegatedContext<>((Context<Member>) new StaticContext<>(context));
         this.member = member;
         this.operationTimeout = operationTimeout;
@@ -146,7 +148,6 @@ public class KerlDHT implements ProtoKERLService {
                                                ReconciliationClient.getLocalLoopback(reconciliation, member));
         this.connectionPool = connectionPool;
         kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
-        this.reconcile = new RingCommunications<>(this.context, member, reconcileComms);
         this.kerlSpace = new KerlSpace(connectionPool, member.getId(), digestAlgorithm);
 
         initializeSchema();
@@ -739,7 +740,7 @@ public class KerlDHT implements ProtoKERLService {
         }
         dhtComms.register(context.getId(), service, validator);
         reconcileComms.register(context.getId(), reconciliation, validator);
-        reconcile(duration);
+        schedule(duration);
     }
 
     public void stop() {
@@ -890,58 +891,19 @@ public class KerlDHT implements ProtoKERLService {
         return !isTimedOut.get();
     }
 
-    //    private <T> boolean read(CompletableFuture<T> result, HashMultiset<T> gathered, AtomicInteger tally,
-    //                             Optional<T> futureSailor, Digest identifier, Supplier<Boolean> isTimedOut,
-    //                             RingCommunications.Destination<Member, DhtService> destination, String action, T empty) {
-    //        if (futureSailor.isEmpty()) {
-    //            log.debug("Failed {}: {} tally: {} from: {}  on: {}", action, identifier, tally,
-    //                      destination.member() == null ? "<null>" : destination.member().getId(), member.getId());
-    //            return !isTimedOut.get();
-    //        }
-    //        T content = futureSailor.get();
-    //        log.trace("{}: {} tally: {} from: {}  on: {}", action, identifier, tally.get(), destination.member().getId(),
-    //                  member.getId());
-    //        gathered.add(content);
-    //        var max = max(gathered);
-    //        if (max != null) {
-    //            tally.set(max.getCount());
-    //            var ctxMajority = context.size() == 1 ? 1 : context.toleranceLevel() + 1;
-    //            final var majority = tally.get() >= ctxMajority;
-    //            if (majority) {
-    //                result.complete(max.getElement());
-    //                log.debug("Majority: {} achieved: {}: {} tally: {} on: {}", max.getCount(), action, identifier,
-    //                          tally.get(), member.getId());
-    //                return false;
-    //            } else {
-    //                log.info("Majority: {} required: {} not achieved: {}: {} tally: {} on: {}", max.getCount(), ctxMajority,
-    //                         action, identifier, tally.get(), member.getId());
-    //            }
-    //        }
-    //        return !isTimedOut.get();
-    //    }
-
-    private void reconcile(Optional<Update> result,
-                           RingCommunications.Destination<Member, ReconciliationService> destination,
-                           Duration duration) {
+    private void reconcile(Update update, ReconciliationService link) {
         if (!started.get()) {
             return;
         }
-        if (result.isPresent()) {
-            try {
-                Update update = result.get();
-                if (update.getEventsCount() > 0) {
-                    reconcileLog.trace("Received: {} events in interval reconciliation from: {} on: {}",
-                                       update.getEventsCount(), destination.member().getId(), member.getId());
-                    kerlSpace.update(update.getEventsList(), kerl);
-                }
-            } catch (NoSuchElementException e) {
-                reconcileLog.debug("null interval reconciliation with {} : {} on: {}", destination.member().getId(),
-                                   e.getMessage(), member.getId());
+        try {
+            if (update.getEventsCount() > 0) {
+                reconcileLog.trace("Received: {} events in interval reconciliation from: {} on: {}",
+                                   update.getEventsCount(), link.getMember().getId(), member.getId());
+                kerlSpace.update(update.getEventsList(), kerl);
             }
-        }
-        if (started.get()) {
-            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> reconcile(duration), log)),
-                               duration.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (NoSuchElementException e) {
+            reconcileLog.debug("null interval reconciliation with {} : {} on: {}", link.getMember().getId(),
+                               e.getMessage(), member.getId());
         }
     }
 
@@ -963,11 +925,28 @@ public class KerlDHT implements ProtoKERLService {
         if (!started.get()) {
             return;
         }
-        Thread.ofVirtual()
-              .start(() -> reconcile.execute(this::reconcile,
-                                             (futureSailor, destination) -> reconcile(futureSailor, destination,
-                                                                                      duration)));
+        var successors = context.successors(member.getId(), m -> true, member);
+        Collections.shuffle(successors);
+        successors.forEach(i -> {
+            try (var link = reconcileComms.connect(i.m())) {
+                if (link != null) {
+                    reconcile(reconcile(link, i.ring()), link);
+                }
+                try {
+                    Thread.sleep(duration.toMillis());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            } catch (IOException e) {
+                log.debug("Error reconciling with: {} on: {}", i.m(), member.getId(), e);
+            } finally {
+                schedule(duration);
+            }
+        });
+    }
 
+    private void schedule(Duration duration) {
+        Thread.ofVirtual().start(() -> Utils.wrapped(() -> reconcile(duration), log));
     }
 
     private void updateLocationHash(Identifier identifier) {

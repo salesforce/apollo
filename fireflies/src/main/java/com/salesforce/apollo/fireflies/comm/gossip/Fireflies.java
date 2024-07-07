@@ -6,15 +6,16 @@
  */
 package com.salesforce.apollo.fireflies.comm.gossip;
 
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
+import com.google.protobuf.Empty;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.fireflies.View.Node;
-import com.salesforce.apollo.fireflies.proto.Gossip;
-import com.salesforce.apollo.fireflies.proto.Join;
-import com.salesforce.apollo.fireflies.proto.SayWhat;
-import com.salesforce.apollo.fireflies.proto.State;
+import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Member;
 
 import java.io.IOException;
+import java.time.Duration;
 
 /**
  * @author hal.hildebrand
@@ -44,6 +45,13 @@ public interface Fireflies extends Link {
             }
 
             @Override
+            public ListenableFuture<Empty> ping(Ping ping, Duration timeout) {
+                var fs = SettableFuture.<Empty>create();
+                fs.set(Empty.getDefaultInstance());
+                return fs;
+            }
+
+            @Override
             public void update(State state) {
             }
         };
@@ -53,6 +61,7 @@ public interface Fireflies extends Link {
 
     Gossip gossip(SayWhat sw);
 
-    void update(State state);
+    ListenableFuture<Empty> ping(Ping ping, Duration timeout);
 
+    void update(State state);
 }

@@ -25,7 +25,6 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.comms.RbcServer;
 import com.salesforce.apollo.membership.messaging.rbc.comms.ReliableBroadcast;
 import com.salesforce.apollo.messaging.proto.*;
-import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.StatusRuntimeException;
@@ -34,7 +33,10 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
@@ -50,20 +52,18 @@ import static com.salesforce.apollo.membership.messaging.rbc.comms.RbcClient.get
  * @author hal.hildebrand
  */
 public class ReliableBroadcaster {
+    private static final Logger log = LoggerFactory.getLogger(ReliableBroadcaster.class);
 
-    private static final Logger                                           log             = LoggerFactory.getLogger(
-    ReliableBroadcaster.class);
-    private final        MessageAdapter                                   adapter;
-    private final        Buffer                                           buffer;
-    private final        Map<UUID, MessageHandler>                        channelHandlers = new ConcurrentHashMap<>();
-    private final        CommonCommunications<ReliableBroadcast, Service> comm;
-    private final        Context<Member>                                  context;
-    private final        RingCommunications<Member, ReliableBroadcast>    gossiper;
-    private final        SigningMember                                    member;
-    private final        RbcMetrics                                       metrics;
-    private final        Parameters                                       params;
-    private final        Map<UUID, Consumer<Integer>>                     roundListeners  = new ConcurrentHashMap<>();
-    private final        AtomicBoolean                                    started         = new AtomicBoolean();
+    private final MessageAdapter                                   adapter;
+    private final Buffer                                           buffer;
+    private final Map<UUID, MessageHandler>                        channelHandlers = new ConcurrentHashMap<>();
+    private final CommonCommunications<ReliableBroadcast, Service> comm;
+    private final Context<Member>                                  context;
+    private final SigningMember                                    member;
+    private final RbcMetrics                                       metrics;
+    private final Parameters                                       params;
+    private final Map<UUID, Consumer<Integer>>                     roundListeners  = new ConcurrentHashMap<>();
+    private final AtomicBoolean                                    started         = new AtomicBoolean();
 
     public ReliableBroadcaster(Context<Member> context, SigningMember member, Parameters parameters,
                                Router communications, RbcMetrics metrics, MessageAdapter adapter) {
@@ -75,8 +75,6 @@ public class ReliableBroadcaster {
         this.comm = communications.create(member, context.getId(), new Service(),
                                           r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r),
                                           getCreate(metrics), ReliableBroadcast.getLocalLoopback(member));
-        gossiper = new RingCommunications<>(context, member, this.comm);
-        gossiper.ignoreSelf();
         this.adapter = adapter;
     }
 
@@ -194,12 +192,9 @@ public class ReliableBroadcaster {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        var initialDelay = Entropy.nextBitsStreamLong(duration.toMillis());
         log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         comm.register(context.getId(), new Service(), validator);
-        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(duration, scheduler), log)),
-                           initialDelay, TimeUnit.MILLISECONDS);
+        schedule(duration, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
     }
 
     public void stop() {
@@ -208,7 +203,6 @@ public class ReliableBroadcaster {
         }
         log.info("Stopping Reliable Broadcaster[{}] on: {}", context.getId(), member.getId());
         buffer.clear();
-        gossiper.reset();
         comm.deregister(context.getId());
     }
 
@@ -246,36 +240,22 @@ public class ReliableBroadcaster {
         }
     }
 
-    private void handle(Optional<Reconcile> result,
-                        RingCommunications.Destination<Member, ReliableBroadcast> destination, Duration duration,
-                        ScheduledExecutorService scheduler, Timer.Context timer) {
+    private void handle(Reconcile gossip, ReliableBroadcast link, int ring, Timer.Context timer) {
         try {
-            if (result.isEmpty()) {
-                return;
-            }
-            Reconcile gossip = result.get();
             buffer.receive(gossip.getUpdatesList());
             var biff = gossip.getDigests();
             if (!Biff.getDefaultInstance().equals(biff)) {
-                destination.link()
-                           .update(ReconcileContext.newBuilder()
-                                                   .setRing(destination.ring())
-                                                   .addAllUpdates(buffer.reconcile(BloomFilter.from(biff),
-                                                                                   destination.member().getId()))
-                                                   .build());
+                link.update(ReconcileContext.newBuilder()
+                                            .setRing(ring)
+                                            .addAllUpdates(
+                                            buffer.reconcile(BloomFilter.from(biff), link.getMember().getId()))
+                                            .build());
             }
         } finally {
             if (timer != null) {
                 timer.stop();
             }
             if (started.get()) {
-                try {
-                    scheduler.schedule(
-                    () -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(duration, scheduler), log)),
-                    duration.toMillis(), TimeUnit.MILLISECONDS);
-                } catch (RejectedExecutionException e) {
-                    return;
-                }
                 buffer.tick();
                 int gossipRound = buffer.round();
                 roundListeners.values().forEach(l -> {
@@ -295,18 +275,36 @@ public class ReliableBroadcaster {
         if (!started.get()) {
             return;
         }
+        try {
+            var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
+            var successors = context.successors(member.getId(), m -> true, member);
+            Collections.shuffle(successors);
+            successors.forEach(i -> {
+                var link = comm.connect(i.m());
+                if (link != null) {
+                    var g = gossipRound(link, i.ring());
+                    if (g != null) {
+                        handle(g, link, i.ring(), timer);
+                    }
+                }
+                try {
+                    Thread.sleep(duration.toMillis());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        } finally {
+            schedule(duration, scheduler);
+        }
+    }
 
-        var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
-        gossiper.execute(this::gossipRound,
-                         (futureSailor, destination) -> handle(futureSailor, destination, duration, scheduler, timer));
+    private void schedule(final Duration duration, ScheduledExecutorService scheduler) {
+        Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(duration, scheduler), log));
     }
 
     @FunctionalInterface
     public interface MessageHandler {
         void message(Digest context, List<Msg> messages);
-    }
-
-    public record HashedContent(Digest hash, ByteString content) {
     }
 
     public record MessageAdapter(Predicate<ByteString> verifier, Function<ByteString, Digest> hasher,

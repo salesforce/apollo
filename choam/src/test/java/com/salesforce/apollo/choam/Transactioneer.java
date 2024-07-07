@@ -63,7 +63,7 @@ class Transactioneer {
                         } catch (InvalidTransaction e) {
                             throw new IllegalStateException(e);
                         }
-                    }, log)), entropy.nextInt(100), TimeUnit.MILLISECONDS);
+                    }, log)), 1, TimeUnit.MILLISECONDS);
                 }
             } else {
                 if (completed.incrementAndGet() >= max) {
@@ -91,6 +91,6 @@ class Transactioneer {
             } catch (InvalidTransaction e) {
                 throw new IllegalStateException(e);
             }
-        }, log)), 2, TimeUnit.SECONDS);
+        }, log)), 1, TimeUnit.SECONDS);
     }
 }

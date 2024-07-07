@@ -136,6 +136,7 @@ public class TxDataSource implements DataSource {
         if (!draining.get()) {
             return processing.offer(txn);
         } else {
+            log.trace("Rejecting txn: {} on: {}", txn, member.getId());
             return false;
         }
     }

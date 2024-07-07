@@ -18,13 +18,11 @@ import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.demesne.proto.DelegationUpdate;
 import com.salesforce.apollo.demesne.proto.SignedDelegate;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.comms.Delegation;
 import com.salesforce.apollo.model.comms.DelegationServer;
 import com.salesforce.apollo.model.comms.DelegationService;
-import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import org.h2.mvstore.MVMap;
@@ -34,9 +32,9 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -51,18 +49,16 @@ public class SubDomain extends Domain {
     private static final String DELEGATES_MAP_TEMPLATE = "delegates-%s";
     private final static Logger log                    = LoggerFactory.getLogger(SubDomain.class);
 
-    private final MVMap<Digeste, SignedDelegate>         delegates;
+    private final MVMap<Digeste, SignedDelegate>      delegates;
     @SuppressWarnings("unused")
-    private final Map<Digeste, Digest>                   delegations = new HashMap<>();
-    private final double                                 fpr;
-    private final Duration                               gossipInterval;
-    private final int                                    maxTransfer;
-    private final RingCommunications<Member, Delegation> ring;
-    private final AtomicBoolean                          started     = new AtomicBoolean();
-    private final MVStore                                store;
-    private final ScheduledExecutorService               scheduler   = Executors.newScheduledThreadPool(1,
-                                                                                                        Thread.ofVirtual()
-                                                                                                              .factory());
+    private final Map<Digeste, Digest>                delegations = new HashMap<>();
+    private final double                              fpr;
+    private final Duration                            gossipInterval;
+    private final int                                 maxTransfer;
+    private final AtomicBoolean                       started     = new AtomicBoolean();
+    private final MVStore                             store;
+    private final ScheduledExecutorService            scheduler;
+    private final CommonCommunications<Delegation, ?> comms;
 
     public SubDomain(ControlledIdentifierMember member, Builder params, Path checkpointBaseDir,
                      RuntimeParameters.Builder runtime, int maxTransfer, Duration gossipInterval, double fpr) {
@@ -80,24 +76,13 @@ public class SubDomain extends Domain {
         this.maxTransfer = maxTransfer;
         this.fpr = fpr;
         final var identifier = qb64(member.getId());
-        final var builder = params.mvBuilder().clone();
-        builder.setFileName(checkpointBaseDir.resolve(identifier).toFile());
-        store = builder.build();
+        store = params.mvBuilder().clone().setFileName(checkpointBaseDir.resolve(identifier).toFile()).build();
         delegates = store.openMap(DELEGATES_MAP_TEMPLATE.formatted(identifier));
-        CommonCommunications<Delegation, ?> comms = params.communications()
-                                                          .create(member, params.context().getId(), delegation(),
-                                                                  "delegates", r -> new DelegationServer(
-                                                          (RoutingClientIdentity) params.communications()
-                                                                                        .getClientIdentityProvider(), r,
-                                                          null));
-        ring = new RingCommunications<Member, Delegation>(params.context(), member, comms);
+        comms = params.communications()
+                      .create(member, params.context().getId(), delegation(), "delegates", r -> new DelegationServer(
+                      (RoutingClientIdentity) params.communications().getClientIdentityProvider(), r, null));
         this.gossipInterval = gossipInterval;
-
-    }
-
-    public SubDomain(ControlledIdentifierMember member, Builder params, String dbURL, RuntimeParameters.Builder runtime,
-                     int maxTransfer, Duration gossipInterval, double fpr) {
-        this(member, params, dbURL, tempDirOf(member.getIdentifier()), runtime, maxTransfer, gossipInterval, fpr);
+        scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
     }
 
     @Override
@@ -106,10 +91,8 @@ public class SubDomain extends Domain {
             return;
         }
         super.start();
-        Duration initialDelay = gossipInterval.plusMillis(Entropy.nextBitsStreamLong(gossipInterval.toMillis()));
         log.trace("Starting SubDomain[{}:{}]", params.context().getId(), member.getId());
-        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(), log)),
-                           initialDelay.toMillis(), TimeUnit.MILLISECONDS);
+        schedule(gossipInterval);
     }
 
     @Override
@@ -140,63 +123,70 @@ public class SubDomain extends Domain {
         };
     }
 
-    private DelegationUpdate gossipRound(Delegation link, Integer ring) {
+    private DelegationUpdate gossipRound(Delegation link) {
         return link.gossip(have());
     }
 
-    private void handle(Optional<DelegationUpdate> result,
-                        RingCommunications.Destination<Member, Delegation> destination, Timer.Context timer) {
-        if (!started.get() || destination == null || destination.link() == null) {
+    private void handle(DelegationUpdate update, Delegation link, int ring, Timer.Context timer) {
+        if (!started.get() || link == null) {
             if (timer != null) {
                 timer.stop();
             }
             return;
         }
         try {
-            if (result.isEmpty()) {
+            if (update == null) {
                 if (timer != null) {
                     timer.stop();
                 }
-                log.trace("no update from {} on: {}", destination.member().getId(), member.getId());
+                log.trace("no update from {} on: {}", link.getMember().getId(), member.getId());
                 return;
             }
-            DelegationUpdate update = result.get();
             if (update.equals(DelegationUpdate.getDefaultInstance())) {
                 return;
             }
-            log.trace("gossip update with {} on: {}", destination.member().getId(), member.getId());
-            destination.link()
-                       .update(update(update, DelegationUpdate.newBuilder()
-                                                              .setRing(destination.ring())
-                                                              .setHave(have())).build());
+            log.trace("gossip update with {} on: {}", link.getMember().getId(), member.getId());
+            link.update(update(update, DelegationUpdate.newBuilder().setRing(ring).setHave(have())).build());
         } finally {
             if (timer != null) {
                 timer.stop();
-            }
-            if (started.get()) {
-                scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(), log)),
-                                   gossipInterval.toMillis(), TimeUnit.MILLISECONDS);
             }
         }
     }
 
     private Biff have() {
         DigestBloomFilter bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), delegates.size(), fpr);
-        delegates.keySet().stream().map(d -> Digest.from(d)).forEach(d -> bff.add(d));
+        delegates.keySet().stream().map(Digest::from).forEach(bff::add);
         return bff.toBff();
     }
 
-    private void oneRound() {
-        Thread.ofVirtual().start(() -> {
-            Timer.Context timer = null;
-            try {
-                ring.execute((link, ring) -> gossipRound(link, ring),
-                             (result, destination) -> handle(result, destination, timer));
-            } catch (Throwable e) {
-                log.error("Error in delegation gossip in SubDomain[{}:{}]", params.context().getId(), member.getId(),
-                          e);
-            }
-        });
+    private void oneRound(Duration duration) {
+        if (!started.get()) {
+            return;
+        }
+
+        try {
+            var successors = params.context().successors(member.getId(), _ -> true, member);
+            Collections.shuffle(successors);
+            successors.forEach(i -> {
+                Timer.Context timer = null;
+                var link = comms.connect(i.m());
+                if (link != null) {
+                    handle(gossipRound(link), link, i.ring(), timer);
+                }
+                try {
+                    Thread.sleep(duration.toMillis());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        } finally {
+            schedule(duration);
+        }
+    }
+
+    private void schedule(Duration duration) {
+        scheduler.schedule(Utils.wrapped(() -> oneRound(duration), log), duration.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     private DelegationUpdate.Builder update(DelegationUpdate update, DelegationUpdate.Builder builder) {

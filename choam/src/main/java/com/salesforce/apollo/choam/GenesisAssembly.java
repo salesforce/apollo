@@ -44,21 +44,22 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
  * @author hal.hildebrand
  */
 public class GenesisAssembly implements Genesis {
-    private static final Logger                    log                = LoggerFactory.getLogger(GenesisAssembly.class);
-    private final        Ethereal                  controller;
-    private final        ChRbcGossip               coordinator;
-    private final        SignedViewMember          genesisMember;
-    private final        Map<Digest, Member>       nextAssembly;
-    private final        AtomicBoolean             published          = new AtomicBoolean();
-    private final        Map<Digest, Join>         slate              = new ConcurrentHashMap<>();
-    private final        AtomicBoolean             started            = new AtomicBoolean();
-    private final        Transitions               transitions;
-    private final        ViewContext               view;
-    private final        Map<Member, Validate>     witnesses          = new ConcurrentHashMap<>();
-    private final        BlockingDeque<ByteString> ds;
-    private final        List<Validate>            pendingValidations = new ArrayList<>();
-    private final        ScheduledExecutorService  scheduler;
-    private volatile     HashedBlock               reconfiguration;
+    private static final Logger                        log                = LoggerFactory.getLogger(
+    GenesisAssembly.class);
+    private final        Ethereal                      controller;
+    private final        ChRbcGossip                   coordinator;
+    private final        SignedViewMember              genesisMember;
+    private final        Map<Digest, Member>           nextAssembly;
+    private final        AtomicBoolean                 published          = new AtomicBoolean();
+    private final        Map<Digest, Join>             slate              = new ConcurrentHashMap<>();
+    private final        AtomicBoolean                 started            = new AtomicBoolean();
+    private final        Transitions                   transitions;
+    private final        ViewContext                   view;
+    private final        Map<Member, Validate>         witnesses          = new ConcurrentHashMap<>();
+    private final        BlockingDeque<Bootstrapping_> ds;
+    private final        List<Validate>                pendingValidations = new ArrayList<>();
+    private final        ScheduledExecutorService      scheduler;
+    private volatile     HashedBlock                   reconfiguration;
 
     public GenesisAssembly(ViewContext vc, CommonCommunications<Terminal, ?> comms, SignedViewMember genesisMember,
                            String label, ScheduledExecutorService scheduler) {
@@ -118,21 +119,26 @@ public class GenesisAssembly implements Genesis {
         var validate = view.generateValidation(reconfiguration);
         log.debug("Certifying genesis block: {} for: {} slate: {} on: {}", reconfiguration.hash, view.context().getId(),
                   slate.keySet().stream().sorted().toList(), params().member().getId());
-        ds.add(validate.toByteString());
+        ds.add(Bootstrapping_.newBuilder().addValidations(validate).build());
         witnesses.put(params().member(), validate);
-        pendingValidations.forEach(v -> certify(v));
+        pendingValidations.forEach(this::certify);
     }
 
     @Override
     public void certify(List<ByteString> preblock, boolean last) {
-        preblock.stream().map(bs -> {
-            try {
-                return Validate.parseFrom(bs);
-            } catch (InvalidProtocolBufferException e) {
-                log.trace("Unable to parse preblock: {} on: {}", bs, params().member().getId(), e);
-                return null;
-            }
-        }).filter(Objects::nonNull).filter(v -> !v.equals(Validate.getDefaultInstance())).forEach(this::certify);
+        preblock.stream()
+                .map(bs -> {
+                    try {
+                        return Bootstrapping_.parseFrom(bs);
+                    } catch (InvalidProtocolBufferException e) {
+                        log.trace("Unable to parse preblock: {} on: {}", bs, params().member().getId(), e);
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .flatMap(bs -> bs.getValidationsList().stream())
+                .filter(v -> !v.equals(Validate.getDefaultInstance()))
+                .forEach(this::certify);
     }
 
     @Override
@@ -141,46 +147,32 @@ public class GenesisAssembly implements Genesis {
         var join = Join.newBuilder().setMember(genesisMember).setKerl(params().kerl().get()).build();
         slate.put(params().member().getId(), join);
 
-        ds.add(join.toByteString());
+        ds.add(Bootstrapping_.newBuilder().addJoins(join).build());
         coordinator.start(params().producer().gossipDuration());
         controller.start();
     }
 
     @Override
     public void gather(List<ByteString> preblock, boolean last) {
-        preblock.stream()
-                .map(bs -> {
-                    try {
-                        return Join.parseFrom(bs);
-                    } catch (InvalidProtocolBufferException e) {
-                        log.trace("error parsing join: {} on: {}", bs, params().member().getId(), e);
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .filter(j -> !j.equals(Join.getDefaultInstance()))
-                .peek(j -> log.info("Gathering: {} on: {}", Digest.from(j.getMember().getVm().getId()),
-                                    params().member().getId()))
-                .forEach(this::join);
+        preblock.stream().map(bs -> {
+            try {
+                return Bootstrapping_.parseFrom(bs);
+            } catch (InvalidProtocolBufferException e) {
+                log.trace("error parsing join: {} on: {}", bs, params().member().getId(), e);
+                return null;
+            }
+        }).filter(Objects::nonNull).forEach(bs -> {
+            bs.getJoinsList()
+              .stream()
+              .filter(j -> !Join.getDefaultInstance().equals(j))
+              .peek(j -> log.info("Gathering: {} on: {}", Digest.from(j.getMember().getVm().getId()),
+                                  params().member().getId()))
+              .forEach(this::join);
+            pendingValidations.addAll(bs.getValidationsList());
+        });
         if (slate.size() == nextAssembly.size()) {
             transitions.gathered();
         }
-    }
-
-    @Override
-    public void nominations(List<ByteString> preblock, boolean last) {
-        preblock.stream()
-                .map(bs -> {
-                    try {
-                        return Validations.parseFrom(bs);
-                    } catch (InvalidProtocolBufferException e) {
-                        log.trace("error parsing validations: {} on: {}", bs, params().member().getId(), e);
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .flatMap(vs -> vs.getValidationsList().stream())
-                .filter(v -> !v.equals(Validate.getDefaultInstance()));
     }
 
     @Override
@@ -259,7 +251,16 @@ public class GenesisAssembly implements Genesis {
             }
             try {
                 var data = ds.poll(100, TimeUnit.MILLISECONDS);
-                return data == null ? ByteString.EMPTY : data;
+                var drain = new ArrayList<Bootstrapping_>();
+                if (data != null) {
+                    drain.add(data);
+                    ds.drainTo(drain);
+                }
+                var builder = Bootstrapping_.newBuilder();
+                drain.forEach(b -> {
+                    builder.addAllValidations(b.getValidationsList()).addAllJoins(b.getJoinsList());
+                });
+                return builder.build().toByteString();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return null;

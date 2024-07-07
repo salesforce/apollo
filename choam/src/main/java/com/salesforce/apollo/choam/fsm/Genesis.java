@@ -24,8 +24,6 @@ public interface Genesis {
 
     void gather(List<ByteString> preblock, boolean last);
 
-    void nominations(List<ByteString> preblock, boolean last);
-
     void publish();
 
     enum BrickLayer implements Transitions {

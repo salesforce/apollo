@@ -18,8 +18,7 @@ import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.ring.RingCommunications;
-import com.salesforce.apollo.ring.RingIterator;
+import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Pair;
 import com.salesforce.apollo.utils.Utils;
@@ -89,13 +88,14 @@ public class Bootstrapper {
         }
         final var randomCut = params.digestAlgorithm().random();
         log.trace("Anchoring from: {} to: {} cut: {} on: {}", start.get(), end, randomCut, params.member().getId());
-        var iterator = new RingIterator<Member, Terminal>(params.gossipDuration(), params.context(), params.member(),
-                                                          comms, true, scheduler);
-        iterator.ignoreSelf();
-        iterator.noDuplicates();
-        iterator.iterate(randomCut, (link, ring) -> anchor(link, start, end),
-                         (tally, futureSailor, destination) -> completeAnchor(futureSailor, start, end, destination),
-                         t -> scheduleAnchorCompletion(start, end));
+
+        var sample = params.context().bftSubset(randomCut);
+
+        var iterator = new SliceIterator<>("Anchor[%s->%s:%s]".formatted(params.member().getId(), end, start.get()),
+                                           params.member(), sample, comms, scheduler);
+        iterator.iterate(link -> anchor(link, start, end),
+                         (result, _, _, member) -> completeAnchor(result, end, start, member),
+                         () -> scheduleAnchorCompletion(start, end), params.gossipDuration());
     }
 
     private Blocks anchor(Terminal link, AtomicReference<ULong> start, ULong end) {
@@ -106,7 +106,7 @@ public class Bootstrapper {
                                                                         params.combine().falsePositiveRate());
 
         start.set(store.firstGap(start.get(), end));
-        store.blocksFrom(start.get(), end, params.bootstrap().maxSyncBlocks()).forEachRemaining(h -> blocksBff.add(h));
+        store.blocksFrom(start.get(), end, params.bootstrap().maxSyncBlocks()).forEachRemaining(blocksBff::add);
         BlockReplication replication = BlockReplication.newBuilder()
                                                        .setBlocksBff(blocksBff.toBff())
                                                        .setFrom(start.get().longValue())
@@ -156,7 +156,7 @@ public class Bootstrapper {
                   .stream()
                   .filter(cb -> cb.getBlock().hasReconfigure())
                   .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
-                  .forEach(reconfigure -> store.put(reconfigure));
+                  .forEach(store::put);
         var lastReconfig = ULong.valueOf(checkpointView.block.getHeader().getLastReconfig());
         var zero = ULong.valueOf(0);
         if (lastReconfig.equals(zero)) {
@@ -166,8 +166,8 @@ public class Bootstrapper {
         }
     }
 
-    private boolean completeAnchor(Optional<Blocks> futureSailor, AtomicReference<ULong> start, ULong end,
-                                   RingCommunications.Destination<Member, Terminal> destination) {
+    private boolean completeAnchor(Optional<Blocks> futureSailor, ULong end, AtomicReference<ULong> start,
+                                   Member member) {
         if (sync.isDone() || anchorSynchronized.isDone()) {
             log.trace("Anchor synchronized isDone: {} anchor sync: {} on: {}", sync.isDone(),
                       anchorSynchronized.isDone(), params.member().getId());
@@ -178,13 +178,13 @@ public class Bootstrapper {
         }
         Blocks blocks = futureSailor.get();
         log.debug("Anchor chain completion reply ({} to {}) blocks: {} from: {} on: {}", start.get(), end,
-                  blocks.getBlocksCount(), destination.member().getId(), params.member().getId());
+                  blocks.getBlocksCount(), member.getId(), params.member().getId());
         blocks.getBlocksList()
               .stream()
               .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
               .peek(cb -> log.trace("Adding anchor completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
-                                    destination.member().getId(), params.member().getId()))
-              .forEach(cb -> store.put(cb));
+                                    member.getId(), params.member().getId()))
+              .forEach(store::put);
         if (store.firstGap(start.get(), end).equals(end)) {
             validateAnchor();
             return false;
@@ -193,17 +193,18 @@ public class Bootstrapper {
     }
 
     private void completeViewChain(AtomicReference<ULong> start, ULong end) {
-        var iterator = new RingIterator<Member, Terminal>(params.gossipDuration(), params.context(), params.member(),
-                                                          scheduler, comms);
-        iterator.noDuplicates();
-        iterator.ignoreSelf();
-        iterator.iterate(params.digestAlgorithm().random(), (link, ring) -> completeViewChain(link, start, end),
-                         (tally, result, destination) -> completeViewChain(result, start, end, destination),
-                         t -> scheduleViewChainCompletion(start, end));
+        var randomCut = params.digestAlgorithm().random();
+        var sample = params.context().bftSubset(randomCut);
+
+        var iterator = new SliceIterator<>("Sample[%s]".formatted(params.member().getId()), params.member(), sample,
+                                           comms, scheduler);
+        iterator.iterate(link -> completeViewChain(link, start, end),
+                         (result, _, _, m) -> completeViewChain(result, start, end, m),
+                         () -> scheduleViewChainCompletion(start, end), params.gossipDuration());
     }
 
     private boolean completeViewChain(Optional<Blocks> futureSailor, AtomicReference<ULong> start, ULong end,
-                                      RingCommunications.Destination<Member, Terminal> destination) {
+                                      Member member) {
         if (sync.isDone() || viewChainSynchronized.isDone()) {
             log.trace("View chain synchronized isDone: {} sync: {} on: {}", sync.isDone(),
                       viewChainSynchronized.isDone(), params.member().getId());
@@ -214,17 +215,17 @@ public class Bootstrapper {
         }
 
         Blocks blocks = futureSailor.get();
-        log.debug("View chain completion reply ({} to {}) from: {} on: {}", start.get(), end,
-                  destination.member().getId(), params.member().getId());
+        log.debug("View chain completion reply ({} to {}) from: {} on: {}", start.get(), end, member.getId(),
+                  params.member().getId());
         blocks.getBlocksList()
               .stream()
               .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
               .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
-                                    destination.member().getId(), params.member().getId()))
-              .forEach(cb -> store.put(cb));
+                                    member.getId(), params.member().getId()))
+              .forEach(store::put);
         if (store.completeFrom(start.get())) {
             validateViewChain();
-            log.debug("View chain complete ({} to {}) from: {} on: {}", start.get(), end, destination.member().getId(),
+            log.debug("View chain complete ({} to {}) from: {} on: {}", start.get(), end, member.getId(),
                       params.member().getId());
             return false;
         }
@@ -240,7 +241,7 @@ public class Bootstrapper {
         var lastViewChain = store.lastViewChainFrom(start.get());
         assert lastViewChain != null : "last view chain from: " + start.get() + " is null";
         start.set(lastViewChain);
-        store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));
+        store.viewChainFrom(start.get(), end).forEachRemaining(blocksBff::add);
         BlockReplication replication = BlockReplication.newBuilder()
                                                        .setBlocksBff(blocksBff.toBff())
                                                        .setFrom(start.get().longValue())
@@ -273,7 +274,7 @@ public class Bootstrapper {
                                           })
                                           .peek(e -> tally.add(new HashedCertifiedBlock(params.digestAlgorithm(),
                                                                                         e.getValue().getGenesis())))
-                                          .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
+                                          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         int threshold = params.context().toleranceLevel();
         if (genesis == null) {
@@ -374,13 +375,13 @@ public class Bootstrapper {
         }
         var randomCut = member.getId();
         log.info("Random cut: {} on: {}", randomCut, params.member().getId());
-        var iterator = new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, true,
-                                          scheduler);
-        iterator.allowDuplicates();
-        iterator.ignoreSelf();
-        iterator.iterate(randomCut, (link, _) -> synchronize(s, link),
-                         (_, futureSailor, destination) -> synchronize(futureSailor, votes, destination),
-                         t -> computeGenesis(votes));
+
+        var sample = params.context().bftSubset(randomCut);
+
+        var iterator = new SliceIterator<>("Sample[%s]".formatted(params.member().getId()), params.member(), sample,
+                                           comms, scheduler);
+        iterator.iterate(link -> synchronize(s, link), (result, _, _, m) -> synchronize(result, votes, m),
+                         () -> computeGenesis(votes), params.gossipDuration());
     }
 
     private void scheduleAnchorCompletion(AtomicReference<ULong> start, ULong anchorTo) {
@@ -418,7 +419,6 @@ public class Bootstrapper {
             } catch (Throwable e) {
                 log.error("Unable to sample sync state on: {}", params.member().getId(), e);
                 sync.completeExceptionally(e);
-                e.printStackTrace();
             }
         }, log)), params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }
@@ -442,33 +442,29 @@ public class Bootstrapper {
         }, log)), params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }
 
-    private boolean synchronize(Optional<Initial> futureSailor, HashMap<Digest, Initial> votes,
-                                RingCommunications.Destination<Member, Terminal> destination) {
+    private boolean synchronize(Optional<Initial> fs, HashMap<Digest, Initial> votes, Member member) {
         final HashedCertifiedBlock established = genesis;
         if (sync.isDone() || established != null) {
             log.trace("Terminating synchronization early isDone: {} genesis: {} cancelled: {} on: {}", sync.isDone(),
-                      established == null ? null : established.hash, destination.member().getId(),
-                      params.member().getId());
+                      established == null ? null : established.hash, member.getId(), params.member().getId());
             return false;
         }
-        if (futureSailor.isEmpty()) {
-            log.trace("Empty synchronization response from: {} on: {}", destination.member().getId(),
-                      params.member().getId());
+        if (fs.isEmpty()) {
+            log.trace("Empty synchronization response from: {} on: {}", member.getId(), params.member().getId());
             return true;
         }
-        Initial vote = futureSailor.get();
+        var vote = fs.get();
         if (vote.hasGenesis()) {
             HashedCertifiedBlock gen = new HashedCertifiedBlock(params.digestAlgorithm(), vote.getGenesis());
             if (!gen.height().equals(ULong.valueOf(0))) {
-                log.error("Returned genesis: {} is not height 0 from: {} on: {}", gen.hash,
-                          destination.member().getId(), params.member().getId());
+                log.error("Returned genesis: {} is not height 0 from: {} on: {}", gen.hash, member.getId(),
+                          params.member().getId());
             }
-            votes.put(destination.member().getId(), vote);
+            votes.put(member.getId(), vote);
             log.debug("Synchronization vote: {} count: {} from: {} recorded on: {}", gen.hash, votes.size(),
-                      destination.member().getId(), params.member().getId());
+                      member.getId(), params.member().getId());
         }
-        log.trace("Continuing, processed sync response from: {} on: {}", destination.member().getId(),
-                  params.member().getId());
+        log.trace("Continuing, processed sync response from: {} on: {}", member.getId(), params.member().getId());
         return true;
     }
 
