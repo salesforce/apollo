@@ -376,13 +376,13 @@ public class Bootstrapper {
         }
         var randomCut = member.getId();
         log.info("Random cut: {} on: {}", randomCut, params.member().getId());
-        var iterator = new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, true,
-                                          scheduler);
-        iterator.allowDuplicates();
-        iterator.ignoreSelf();
-        iterator.iterate(randomCut, (link, _) -> synchronize(s, link),
-                         (_, futureSailor, destination) -> synchronize(futureSailor, votes, destination),
-                         t -> computeGenesis(votes));
+
+        var sample = params.context().bftSubset(randomCut);
+
+        var iterator = new SliceIterator<>("Sample[%s]".formatted(params.member().getId()), params.member(), sample,
+                                           comms, scheduler);
+        iterator.iterate(link -> synchronize(s, link), (result, _, _, m) -> synchronize(result, votes, m),
+                         () -> computeGenesis(votes), params.gossipDuration());
     }
 
     private void scheduleAnchorCompletion(AtomicReference<ULong> start, ULong anchorTo) {
@@ -443,33 +443,29 @@ public class Bootstrapper {
         }, log)), params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }
 
-    private boolean synchronize(Optional<Initial> futureSailor, HashMap<Digest, Initial> votes,
-                                RingCommunications.Destination<Member, Terminal> destination) {
+    private boolean synchronize(Optional<Initial> fs, HashMap<Digest, Initial> votes, Member member) {
         final HashedCertifiedBlock established = genesis;
         if (sync.isDone() || established != null) {
             log.trace("Terminating synchronization early isDone: {} genesis: {} cancelled: {} on: {}", sync.isDone(),
-                      established == null ? null : established.hash, destination.member().getId(),
-                      params.member().getId());
+                      established == null ? null : established.hash, member.getId(), params.member().getId());
             return false;
         }
-        if (futureSailor.isEmpty()) {
-            log.trace("Empty synchronization response from: {} on: {}", destination.member().getId(),
-                      params.member().getId());
+        if (fs.isEmpty()) {
+            log.trace("Empty synchronization response from: {} on: {}", member.getId(), params.member().getId());
             return true;
         }
-        Initial vote = futureSailor.get();
+        var vote = fs.get();
         if (vote.hasGenesis()) {
             HashedCertifiedBlock gen = new HashedCertifiedBlock(params.digestAlgorithm(), vote.getGenesis());
             if (!gen.height().equals(ULong.valueOf(0))) {
-                log.error("Returned genesis: {} is not height 0 from: {} on: {}", gen.hash,
-                          destination.member().getId(), params.member().getId());
+                log.error("Returned genesis: {} is not height 0 from: {} on: {}", gen.hash, member.getId(),
+                          params.member().getId());
             }
-            votes.put(destination.member().getId(), vote);
+            votes.put(member.getId(), vote);
             log.debug("Synchronization vote: {} count: {} from: {} recorded on: {}", gen.hash, votes.size(),
-                      destination.member().getId(), params.member().getId());
+                      member.getId(), params.member().getId());
         }
-        log.trace("Continuing, processed sync response from: {} on: {}", destination.member().getId(),
-                  params.member().getId());
+        log.trace("Continuing, processed sync response from: {} on: {}", member.getId(), params.member().getId());
         return true;
     }
 
