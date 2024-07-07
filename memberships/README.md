@@ -13,11 +13,6 @@ function that is distinct from any other ring in a Context.
 The membership module also provides fundamental communication abstractions and implementations for both MTLS GRPC (
 HTTP/2) and local, in process emulations using in process communication facilities of GRPC.
 
-This module also provides fundamental gossip-based Messaging functionality within a Context. The RingCommunications
-provides a general abstraction for traversing cuts across a Context's rings at a given Member or any supplied Digest.
-Likewise, a more specialized RingIterator is supplied for terminating actions that may require repeated rounds of gossip
-to satisfy.
-
 ## Context
 
 A membership group is defined by the Context. The Context is an abstraction from
@@ -74,22 +69,6 @@ nodes. This is somewhat policy-based, but errs on the side of "if you have to, y
 which can lead to connection drains. Also, too, it relies on good behavior (releasing) for garbage collection and such,
 and so can also be abused. Luckily, all interaction in Apollo is essentially
 event-based, and so makes try{} finally {} easy to apply locally.
-
-## Simplified Ring Communication Patterns
-
-To simplify the common operations when using the Context and its associated Firefly rings, two classes are provided:
-
-- RingCommunications
-- RingIterator
-
-Both are stateful classes and patterns, to be clear and are not to be shared across usages. The RingCommunications
-simplifies the common task of executing a "round" of communication with a parter. This is implemented in cooperation
-with the Context's Rings, providing a nicely randomized, asynchronous mechanism to build more complicated communications
-upon. Likewise, the RingIterator is a pattern that simplifies the randomized traversal of a given membership cut
-across the Fireflies ring. This combines iteration much like an Iterator in Java, and provides mechanisms for dealing
-with continuation of the iteration (like "next()" in an iterator) as well as termination. Both the iteration pattern and
-the RingCommunications pattern continuously iterate across the Firefly rings across a given cut, represented by a Digest
-or Member.
 
 ## Distributed Bloom Filter-Based Set Reconciliation
 

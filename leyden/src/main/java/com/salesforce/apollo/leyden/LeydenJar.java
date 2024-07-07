@@ -16,8 +16,7 @@ import com.salesforce.apollo.leyden.comm.reconcile.*;
 import com.salesforce.apollo.leyden.proto.*;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.ring.RingCommunications;
-import com.salesforce.apollo.ring.RingIterator;
+import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Hex;
 import com.salesforce.apollo.utils.Utils;
@@ -97,20 +96,24 @@ public class LeydenJar {
 
     public void bind(Binding bound) {
         var key = bound.getBound().getKey();
-        log.info("Bind: {} on: {}", Hex.hex(key.toByteArray()), member.getId());
+        var hex = Hex.hex(key.toByteArray());
+        log.info("Bind: {} on: {}", hex, member.getId());
         var hash = algorithm.digest(key);
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<String>();
         var gathered = HashMultiset.<String>create();
-        var iterate = new RingIterator<>(operationsFrequency, context, member, scheduler, binderComms);
-        iterate.iterate(hash, null, (link, r) -> {
-                            link.bind(bound);
-                            return "";
-                        }, () -> failedMajority(result, maxCount(gathered)),
-                        (tally, futureSailor, destination) -> write(result, gathered, tally, futureSailor, hash,
-                                                                    isTimedOut, destination),
-                        t -> failedMajority(result, maxCount(gathered)));
+        var sample = context.bftSubset(hash);
+
+        var iterator = new SliceIterator<>("Bind[%s on: %s]".formatted(hex, member.getId()), member, sample,
+                                           binderComms, scheduler);
+        iterator.iterate(null, link -> {
+                             link.bind(bound);
+                             return "";
+                         }, (r, tally, comm, m) -> write(result, gathered, tally, r, hash, isTimedOut, m),
+                         () -> failedMajority(result, maxCount(gathered)), operationsFrequency,
+                         () -> failedMajority(result, maxCount(gathered)));
+
         try {
             result.get();
         } catch (InterruptedException e) {
@@ -130,16 +133,19 @@ public class LeydenJar {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Bound>();
         var gathered = HashMultiset.<Bound>create();
-        var iterate = new RingIterator<>(operationsFrequency, context, member, scheduler, binderComms);
-        iterate.iterate(hash, null, (link, r) -> {
-                            var bound = link.get(keyAndToken);
-                            log.debug("Get {}: bound: <{}:{}> from: {} on: {}", hash, bound.getKey().toStringUtf8(),
-                                      bound.getValue().toStringUtf8(), link.getMember().getId(), member.getId());
-                            return bound;
-                        }, () -> failedMajority(result, maxCount(gathered)),
-                        (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, hash,
-                                                                   isTimedOut, destination, "Get"),
-                        t -> failedMajority(result, maxCount(gathered)));
+
+        var sample = context.bftSubset(hash);
+
+        var iterator = new SliceIterator<>("Bind[%s on: %s]".formatted(hash, member.getId()), member, sample,
+                                           binderComms, scheduler);
+        iterator.iterate(null, link -> {
+                             var bound = link.get(keyAndToken);
+                             log.debug("Get {}: bound: <{}:{}> from: {} on: {}", hash, bound.getKey().toStringUtf8(),
+                                       bound.getValue().toStringUtf8(), link.getMember().getId(), member.getId());
+                             return bound;
+                         }, (r, tally, comm, m) -> read(result, gathered, tally, r, hash, isTimedOut, m, "Get"),
+                         () -> failedMajority(result, maxCount(gathered)), operationsFrequency,
+                         () -> failedMajority(result, maxCount(gathered)));
         try {
             return result.get();
         } catch (InterruptedException e) {
@@ -184,14 +190,17 @@ public class LeydenJar {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<String>();
         var gathered = HashMultiset.<String>create();
-        var iterate = new RingIterator<>(operationsFrequency, context, member, scheduler, binderComms);
-        iterate.iterate(hash, null, (link, r) -> {
-                            link.unbind(keyAndToken);
-                            return "";
-                        }, () -> failedMajority(result, maxCount(gathered)),
-                        (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, hash,
-                                                                   isTimedOut, destination, "Unbind"),
-                        t -> failedMajority(result, maxCount(gathered)));
+
+        var sample = context.bftSubset(hash);
+
+        var iterator = new SliceIterator<>("Bind[%s on: %s]".formatted(hash, member.getId()), member, sample,
+                                           binderComms, scheduler);
+        iterator.iterate(null, link -> {
+                             link.unbind(keyAndToken);
+                             return "";
+                         }, (r, tally, comm, m) -> read(result, gathered, tally, r, hash, isTimedOut, m, "Unbind"),
+                         () -> failedMajority(result, maxCount(gathered)), operationsFrequency,
+                         () -> failedMajority(result, maxCount(gathered)));
         try {
             result.get();
         } catch (InterruptedException e) {
@@ -318,30 +327,24 @@ public class LeydenJar {
     }
 
     private <B> boolean read(CompletableFuture<B> result, HashMultiset<B> gathered, AtomicInteger tally,
-                             Optional<B> futureSailor, Digest hash, Supplier<Boolean> isTimedOut,
-                             RingCommunications.Destination<Member, BinderClient> destination, String op) {
+                             Optional<B> futureSailor, Digest hash, Supplier<Boolean> isTimedOut, Member m, String op) {
         if (futureSailor.isEmpty()) {
-            log.debug("{}: {} empty from: {}  on: {}", op, hash, destination.member().getId(), member.getId());
+            log.debug("{}: {} empty from: {}  on: {}", op, hash, m.getId(), member.getId());
             return !isTimedOut.get();
         }
         var content = futureSailor.get();
-        if (content != null) {
-            log.debug("{}: {} from: {}  on: {}", op, hash, destination.member().getId(), member.getId());
-            gathered.add(content);
-            var max = max(gathered);
-            if (max != null) {
-                tally.set(max.getCount());
-                if (max.getCount() > context.toleranceLevel()) {
-                    result.complete(max.getElement());
-                    log.debug("Majority {}: {} achieved: {} on: {}", op, max.getCount(), hash, member.getId());
-                    return false;
-                }
+        log.debug("{}: {} from: {}  on: {}", op, hash, m.getId(), member.getId());
+        gathered.add(content);
+        var max = max(gathered);
+        if (max != null) {
+            tally.set(max.getCount());
+            if (max.getCount() > context.toleranceLevel()) {
+                result.complete(max.getElement());
+                log.debug("Majority {}: {} achieved: {} on: {}", op, max.getCount(), hash, member.getId());
+                return false;
             }
-            return !isTimedOut.get();
-        } else {
-            log.debug("Failed {}: {} from: {}  on: {}", op, hash, destination.member().getId(), member.getId());
-            return !isTimedOut.get();
         }
+        return !isTimedOut.get();
     }
 
     private Update reconcile(ReconciliationClient link, Integer ring) {
@@ -460,15 +463,14 @@ public class LeydenJar {
         }
     }
 
-    private <B> boolean write(CompletableFuture<B> result, HashMultiset<B> gathered, AtomicInteger tally,
-                              Optional<B> futureSailor, Digest hash, Supplier<Boolean> isTimedOut,
-                              RingCommunications.Destination<Member, BinderClient> destination) {
+    private boolean write(CompletableFuture<String> result, HashMultiset<String> gathered, AtomicInteger tally,
+                          Optional<String> futureSailor, Digest hash, Supplier<Boolean> isTimedOut, Member member) {
         if (futureSailor.isEmpty()) {
             return !isTimedOut.get();
         }
         var content = futureSailor.get();
         if (content != null) {
-            log.debug("Bind: {} from: {}  on: {}", hash, destination.member().getId(), member.getId());
+            log.debug("Bind: {} from: {}  on: {}", hash, member.getId(), member.getId());
             gathered.add(content);
             var max = max(gathered);
             if (max != null) {
@@ -481,7 +483,7 @@ public class LeydenJar {
             }
             return !isTimedOut.get();
         } else {
-            log.debug("Failed: Bind : {} from: {}  on: {}", hash, destination.member().getId(), member.getId());
+            log.debug("Failed: Bind : {} from: {}  on: {}", hash, member.getId(), member.getId());
             return !isTimedOut.get();
         }
     }

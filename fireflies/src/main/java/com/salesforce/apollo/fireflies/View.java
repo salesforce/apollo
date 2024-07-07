@@ -36,7 +36,6 @@ import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.RoundScheduler;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Verifiers;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
@@ -1096,7 +1095,7 @@ public class View {
                         State.newBuilder().setView(currentView().toDigeste()).setRing(ring).setUpdate(update).build());
                     }
                 } catch (StatusRuntimeException e) {
-                    handleSRE("update", new RingCommunications.Destination<>(member, link, ring), member, e);
+                    handleSRE("update", ring, member, e);
                 }
             } else {
                 stable(() -> processUpdates(gossip));
@@ -1107,7 +1106,7 @@ public class View {
                           node.getId());
             } else {
                 if (e.getCause() instanceof StatusRuntimeException sre) {
-                    handleSRE("gossip", new RingCommunications.Destination<>(member, link, ring), member, sre);
+                    handleSRE("gossip", ring, member, sre);
                 } else {
                     log.debug("Exception gossiping with: {} view: {} on: {}", member.getId(), currentView(),
                               node.getId(), e);
@@ -1117,13 +1116,12 @@ public class View {
         }
     }
 
-    private void handleSRE(String type, RingCommunications.Destination<Participant, Fireflies> destination,
-                           final Participant member, StatusRuntimeException sre) {
+    private void handleSRE(String type, int ring, final Participant member, StatusRuntimeException sre) {
         switch (sre.getStatus().getCode()) {
         case PERMISSION_DENIED:
             log.trace("Rejected: {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView(), member.getId(),
                       node.getId());
-            accuse(member, destination.ring(), sre);
+            accuse(member, ring, sre);
             break;
         case FAILED_PRECONDITION:
             log.trace("Failed: {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView(), member.getId(),
@@ -1138,7 +1136,7 @@ public class View {
             break;
         default:
             log.debug("Error {}: {} from: {} on: {}", type, sre.getStatus(), member.getId(), node.getId());
-            accuse(member, destination.ring(), sre);
+            accuse(member, ring, sre);
             break;
         }
     }
