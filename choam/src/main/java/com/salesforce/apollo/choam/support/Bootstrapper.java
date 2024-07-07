@@ -18,8 +18,6 @@ import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.ring.RingCommunications;
-import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Pair;
@@ -195,17 +193,18 @@ public class Bootstrapper {
     }
 
     private void completeViewChain(AtomicReference<ULong> start, ULong end) {
-        var iterator = new RingIterator<Member, Terminal>(params.gossipDuration(), params.context(), params.member(),
-                                                          scheduler, comms);
-        iterator.noDuplicates();
-        iterator.ignoreSelf();
-        iterator.iterate(params.digestAlgorithm().random(), (link, ring) -> completeViewChain(link, start, end),
-                         (tally, result, destination) -> completeViewChain(result, start, end, destination),
-                         t -> scheduleViewChainCompletion(start, end));
+        var randomCut = params.digestAlgorithm().random();
+        var sample = params.context().bftSubset(randomCut);
+
+        var iterator = new SliceIterator<>("Sample[%s]".formatted(params.member().getId()), params.member(), sample,
+                                           comms, scheduler);
+        iterator.iterate(link -> completeViewChain(link, start, end),
+                         (result, _, _, m) -> completeViewChain(result, start, end, m),
+                         () -> scheduleViewChainCompletion(start, end), params.gossipDuration());
     }
 
     private boolean completeViewChain(Optional<Blocks> futureSailor, AtomicReference<ULong> start, ULong end,
-                                      RingCommunications.Destination<Member, Terminal> destination) {
+                                      Member member) {
         if (sync.isDone() || viewChainSynchronized.isDone()) {
             log.trace("View chain synchronized isDone: {} sync: {} on: {}", sync.isDone(),
                       viewChainSynchronized.isDone(), params.member().getId());
@@ -216,17 +215,17 @@ public class Bootstrapper {
         }
 
         Blocks blocks = futureSailor.get();
-        log.debug("View chain completion reply ({} to {}) from: {} on: {}", start.get(), end,
-                  destination.member().getId(), params.member().getId());
+        log.debug("View chain completion reply ({} to {}) from: {} on: {}", start.get(), end, member.getId(),
+                  params.member().getId());
         blocks.getBlocksList()
               .stream()
               .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
               .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
-                                    destination.member().getId(), params.member().getId()))
+                                    member.getId(), params.member().getId()))
               .forEach(store::put);
         if (store.completeFrom(start.get())) {
             validateViewChain();
-            log.debug("View chain complete ({} to {}) from: {} on: {}", start.get(), end, destination.member().getId(),
+            log.debug("View chain complete ({} to {}) from: {} on: {}", start.get(), end, member.getId(),
                       params.member().getId());
             return false;
         }
