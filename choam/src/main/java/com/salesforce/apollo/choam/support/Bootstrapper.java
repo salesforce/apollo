@@ -20,6 +20,7 @@ import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
+import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Pair;
 import com.salesforce.apollo.utils.Utils;
@@ -89,13 +90,14 @@ public class Bootstrapper {
         }
         final var randomCut = params.digestAlgorithm().random();
         log.trace("Anchoring from: {} to: {} cut: {} on: {}", start.get(), end, randomCut, params.member().getId());
-        var iterator = new RingIterator<Member, Terminal>(params.gossipDuration(), params.context(), params.member(),
-                                                          comms, true, scheduler);
-        iterator.ignoreSelf();
-        iterator.noDuplicates();
-        iterator.iterate(randomCut, (link, ring) -> anchor(link, start, end),
-                         (tally, futureSailor, destination) -> completeAnchor(futureSailor, start, end, destination),
-                         t -> scheduleAnchorCompletion(start, end));
+
+        var sample = params.context().bftSubset(randomCut);
+
+        var iterator = new SliceIterator<>("Anchor[%s->%s:%s]".formatted(params.member().getId(), end, start.get()),
+                                           params.member(), sample, comms, scheduler);
+        iterator.iterate(link -> anchor(link, start, end),
+                         (result, _, _, member) -> completeAnchor(result, end, start, member),
+                         () -> scheduleAnchorCompletion(start, end), params.gossipDuration());
     }
 
     private Blocks anchor(Terminal link, AtomicReference<ULong> start, ULong end) {
@@ -106,7 +108,7 @@ public class Bootstrapper {
                                                                         params.combine().falsePositiveRate());
 
         start.set(store.firstGap(start.get(), end));
-        store.blocksFrom(start.get(), end, params.bootstrap().maxSyncBlocks()).forEachRemaining(h -> blocksBff.add(h));
+        store.blocksFrom(start.get(), end, params.bootstrap().maxSyncBlocks()).forEachRemaining(blocksBff::add);
         BlockReplication replication = BlockReplication.newBuilder()
                                                        .setBlocksBff(blocksBff.toBff())
                                                        .setFrom(start.get().longValue())
@@ -156,7 +158,7 @@ public class Bootstrapper {
                   .stream()
                   .filter(cb -> cb.getBlock().hasReconfigure())
                   .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
-                  .forEach(reconfigure -> store.put(reconfigure));
+                  .forEach(store::put);
         var lastReconfig = ULong.valueOf(checkpointView.block.getHeader().getLastReconfig());
         var zero = ULong.valueOf(0);
         if (lastReconfig.equals(zero)) {
@@ -166,8 +168,8 @@ public class Bootstrapper {
         }
     }
 
-    private boolean completeAnchor(Optional<Blocks> futureSailor, AtomicReference<ULong> start, ULong end,
-                                   RingCommunications.Destination<Member, Terminal> destination) {
+    private boolean completeAnchor(Optional<Blocks> futureSailor, ULong end, AtomicReference<ULong> start,
+                                   Member member) {
         if (sync.isDone() || anchorSynchronized.isDone()) {
             log.trace("Anchor synchronized isDone: {} anchor sync: {} on: {}", sync.isDone(),
                       anchorSynchronized.isDone(), params.member().getId());
@@ -178,13 +180,13 @@ public class Bootstrapper {
         }
         Blocks blocks = futureSailor.get();
         log.debug("Anchor chain completion reply ({} to {}) blocks: {} from: {} on: {}", start.get(), end,
-                  blocks.getBlocksCount(), destination.member().getId(), params.member().getId());
+                  blocks.getBlocksCount(), member.getId(), params.member().getId());
         blocks.getBlocksList()
               .stream()
               .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
               .peek(cb -> log.trace("Adding anchor completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
-                                    destination.member().getId(), params.member().getId()))
-              .forEach(cb -> store.put(cb));
+                                    member.getId(), params.member().getId()))
+              .forEach(store::put);
         if (store.firstGap(start.get(), end).equals(end)) {
             validateAnchor();
             return false;
@@ -221,7 +223,7 @@ public class Bootstrapper {
               .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
               .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
                                     destination.member().getId(), params.member().getId()))
-              .forEach(cb -> store.put(cb));
+              .forEach(store::put);
         if (store.completeFrom(start.get())) {
             validateViewChain();
             log.debug("View chain complete ({} to {}) from: {} on: {}", start.get(), end, destination.member().getId(),
@@ -240,7 +242,7 @@ public class Bootstrapper {
         var lastViewChain = store.lastViewChainFrom(start.get());
         assert lastViewChain != null : "last view chain from: " + start.get() + " is null";
         start.set(lastViewChain);
-        store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));
+        store.viewChainFrom(start.get(), end).forEachRemaining(blocksBff::add);
         BlockReplication replication = BlockReplication.newBuilder()
                                                        .setBlocksBff(blocksBff.toBff())
                                                        .setFrom(start.get().longValue())
@@ -273,7 +275,7 @@ public class Bootstrapper {
                                           })
                                           .peek(e -> tally.add(new HashedCertifiedBlock(params.digestAlgorithm(),
                                                                                         e.getValue().getGenesis())))
-                                          .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
+                                          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         int threshold = params.context().toleranceLevel();
         if (genesis == null) {
@@ -418,7 +420,6 @@ public class Bootstrapper {
             } catch (Throwable e) {
                 log.error("Unable to sample sync state on: {}", params.member().getId(), e);
                 sync.completeExceptionally(e);
-                e.printStackTrace();
             }
         }, log)), params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }

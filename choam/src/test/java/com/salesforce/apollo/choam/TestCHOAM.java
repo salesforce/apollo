@@ -104,15 +104,15 @@ public class TestCHOAM {
         var params = Parameters.newBuilder()
                                .setGenerateGenesis(true)
                                .setGenesisViewId(origin.prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(20))
+                               .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(15_000)
                                                               .setMaxBatchByteSize(200 * 1024 * 1024)
-                                                              .setGossipDuration(Duration.ofMillis(20))
+                                                              .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .setEthereal(Config.newBuilder()
                                                                                  .setNumberOfEpochs(12)
-                                                                                 .setEpochLength(15))
+                                                                                 .setEpochLength(33))
                                                               .build())
                                .setCheckpointBlockDelta(3);
 
@@ -166,10 +166,10 @@ public class TestCHOAM {
 
     @Test
     public void submitMultiplTxn() throws Exception {
-        routers.values().forEach(r -> r.start());
-        choams.values().forEach(ch -> ch.start());
+        routers.values().forEach(Router::start);
+        choams.values().forEach(CHOAM::start);
 
-        final var timeout = Duration.ofSeconds(15);
+        final var timeout = Duration.ofSeconds(3);
 
         final var transactioneers = new ArrayList<Transactioneer>();
         final var clientCount = LARGE_TESTS ? 1_500 : 5;
@@ -182,25 +182,23 @@ public class TestCHOAM {
         });
 
         boolean activated = Utils.waitForCondition(30_000, 1_000,
-                                                   () -> choams.values().stream().filter(c -> !c.active()).count()
-                                                   == 0);
-        assertTrue(activated, "System did not become active: " + choams.entrySet()
+                                                   () -> choams.values().stream().allMatch(c -> c.active()));
+        assertTrue(activated, "System did not become active: " + choams.values()
                                                                        .stream()
-                                                                       .map(e -> e.getValue())
                                                                        .filter(c -> !c.active())
-                                                                       .map(c -> c.logState())
+                                                                       .map(CHOAM::logState)
                                                                        .toList());
 
-        transactioneers.stream().forEach(e -> e.start());
+        transactioneers.forEach(Transactioneer::start);
         try {
             final var complete = countdown.await(LARGE_TESTS ? 3200 : 240, TimeUnit.SECONDS);
             assertTrue(complete, "All clients did not complete: " + transactioneers.stream()
-                                                                                   .map(t -> t.getCompleted())
+                                                                                   .map(Transactioneer::getCompleted)
                                                                                    .filter(i -> i < max)
                                                                                    .count());
         } finally {
             routers.values().forEach(e -> e.close(Duration.ofSeconds(0)));
-            choams.values().forEach(e -> e.stop());
+            choams.values().forEach(CHOAM::stop);
 
             System.out.println();
             if (Boolean.getBoolean("reportMetrics")) {

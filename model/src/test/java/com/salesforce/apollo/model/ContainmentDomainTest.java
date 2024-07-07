@@ -126,17 +126,17 @@ public class ContainmentDomainTest {
                          .setGenerateGenesis(true)
                          .setGenesisViewId(GENESIS_VIEW_ID)
                          .setBootstrap(
-                         Parameters.BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(20)).build())
+                         Parameters.BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(5)).build())
                          .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
-                         .setGossipDuration(Duration.ofMillis(20))
+                         .setGossipDuration(Duration.ofMillis(5))
                          .setProducer(Parameters.ProducerParameters.newBuilder()
-                                                                   .setGossipDuration(Duration.ofMillis(20))
+                                                                   .setGossipDuration(Duration.ofMillis(5))
                                                                    .setBatchInterval(Duration.ofMillis(50))
                                                                    .setMaxBatchByteSize(1024 * 1024)
                                                                    .setMaxBatchCount(10_000)
                                                                    .setEthereal(Config.newBuilder()
-                                                                                      .setNumberOfEpochs(12)
-                                                                                      .setEpochLength(33))
+                                                                                      .setNumberOfEpochs(3)
+                                                                                      .setEpochLength(20))
                                                                    .build())
                          .setCheckpointBlockDelta(200);
     }

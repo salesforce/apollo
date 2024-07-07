@@ -228,3 +228,8 @@ message Slice {
   int32 index = 1;
   bytes block = 2;
 }
+
+message Bootstrapping_ {
+  repeated Validate validations = 1;
+  repeated Join joins = 2;
+}

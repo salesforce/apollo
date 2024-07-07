@@ -245,16 +245,20 @@ public class Ethereal {
                 String.format("LastTU has been changed underneath us, expected: %s have: %s", current, next));
             }
 
-            consumer.execute(new UnitTask(u, unit -> {
-                if (!started.get()) {
-                    return;
-                }
+            try {
+                consumer.execute(new UnitTask(u, unit -> {
+                    if (!started.get()) {
+                        return;
+                    }
 
-                // the creator already knows about units created by this node.
-                if (unit.creator() != config.pid()) {
-                    creator.consume(unit);
-                }
-            }));
+                    // the creator already knows about units created by this node.
+                    if (unit.creator() != config.pid()) {
+                        creator.consume(unit);
+                    }
+                }));
+            } catch (RejectedExecutionException e) {
+                // ignore
+            }
 
         });
         final var adder = new Adder(epoch, dg, maxSerializedSize, config, failed);

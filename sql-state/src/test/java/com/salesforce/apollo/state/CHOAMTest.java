@@ -102,7 +102,7 @@ public class CHOAMTest {
             routers = null;
         }
         if (choams != null) {
-            choams.values().forEach(e -> e.stop());
+            choams.values().forEach(CHOAM::stop);
             choams = null;
         }
         if (scheduler != null) {
@@ -112,7 +112,7 @@ public class CHOAMTest {
         if (executor != null) {
             executor.shutdown();
         }
-        updaters.values().forEach(up -> up.close());
+        updaters.values().forEach(SqlStateMachine::close);
         updaters.clear();
         members = null;
         System.out.println();
@@ -159,116 +159,112 @@ public class CHOAMTest {
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> {
             return stereotomy.newIdentifier();
-        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
-        members.forEach(m -> context.activate(m));
+        }).map(ControlledIdentifierMember::new).map(e -> (SigningMember) e).toList();
+        members.forEach(context::activate);
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder().setTarget(30),
-                                                                executor);
-            return localRouter;
-        }));
+        routers = members.stream()
+                         .collect(Collectors.toMap(Member::getId, m -> new LocalServer(prefix, m).router(
+                         ServerConnectionCache.newBuilder().setTarget(30), executor)));
         choams = members.stream()
                         .collect(
-                        Collectors.toMap(m -> m.getId(), m -> createCHOAM(entropy, params, m, context, metrics)));
+                        Collectors.toMap(Member::getId, m -> createCHOAM(entropy, params, m, context, metrics)));
     }
 
     @Test
     public void submitMultiplTxn() throws Exception {
         final Random entropy = new Random();
-        final Duration timeout = Duration.ofSeconds(30);
+        final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = LARGE_TESTS ? 1_000 : 2;
         final int max = LARGE_TESTS ? 50 : 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
         System.out.println("Warm up");
-        routers.values().forEach(r -> r.start());
-        choams.values().forEach(ch -> ch.start());
+        routers.values().forEach(Router::start);
+        choams.values().forEach(CHOAM::start);
 
         final var activated = Utils.waitForCondition(30_000, 1_000,
-                                                     () -> choams.values().stream().filter(c -> !c.active()).count()
-                                                     == 0);
-        assertTrue(activated, "System did not become active: " + (choams.entrySet()
+                                                     () -> choams.values().stream().allMatch(CHOAM::active));
+        assertTrue(activated, "System did not become active: " + (choams.values()
                                                                         .stream()
-                                                                        .map(e -> e.getValue())
                                                                         .filter(c -> !c.active())
-                                                                        .map(c -> c.logState())
+                                                                        .map(CHOAM::logState)
                                                                         .toList()));
 
-        updaters.entrySet().forEach(e -> {
-            var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
+        updaters.forEach((key, value) -> {
+            var mutator = value.getMutator(choams.get(key.getId()).getSession());
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(
                 new Transactioneer(scheduler, () -> update(entropy, mutator), mutator, timeout, max, countdown));
             }
         });
         System.out.println("Starting txns");
-        transactioneers.stream().forEach(e -> e.start());
+        transactioneers.forEach(Transactioneer::start);
         final var finished = countdown.await(LARGE_TESTS ? 1200 : 120, TimeUnit.SECONDS);
         assertTrue(finished,
                    "did not finish transactions: " + countdown.getCount() + " txneers: " + transactioneers.stream()
                                                                                                           .map(
-                                                                                                          t -> t.completed())
+                                                                                                          Transactioneer::completed)
                                                                                                           .toList());
 
         try {
             assertTrue(Utils.waitForCondition(20_000, 1000, () -> {
-                if (transactioneers.stream().mapToInt(t -> t.inFlight()).filter(t -> t == 0).count()
+                if (transactioneers.stream().mapToInt(Transactioneer::inFlight).filter(t -> t == 0).count()
                 != transactioneers.size()) {
                     return false;
                 }
                 final ULong target = updaters.values()
                                              .stream()
-                                             .map(ssm -> ssm.getCurrentBlock())
-                                             .filter(cb -> cb != null)
-                                             .map(cb -> cb.height())
-                                             .max((a, b) -> a.compareTo(b))
+                                             .map(SqlStateMachine::getCurrentBlock)
+                                             .filter(Objects::nonNull)
+                                             .map(SqlStateMachine.Current::height)
+                                             .max(ULong::compareTo)
                                              .get();
                 return members.stream()
-                              .map(m -> updaters.get(m))
-                              .map(ssm -> ssm.getCurrentBlock())
-                              .filter(cb -> cb != null)
-                              .map(cb -> cb.height())
+                              .map(updaters::get)
+                              .map(SqlStateMachine::getCurrentBlock)
+                              .filter(Objects::nonNull)
+                              .map(SqlStateMachine.Current::height)
                               .filter(l -> l.compareTo(target) == 0)
                               .count() == members.size();
             }), "members did not stabilize at same block: " + updaters.values()
                                                                       .stream()
-                                                                      .map(ssm -> ssm.getCurrentBlock())
-                                                                      .filter(cb -> cb != null)
-                                                                      .map(cb -> cb.height())
+                                                                      .map(SqlStateMachine::getCurrentBlock)
+                                                                      .filter(Objects::nonNull)
+                                                                      .map(SqlStateMachine.Current::height)
                                                                       .toList());
         } finally {
-            choams.values().forEach(e -> e.stop());
+            choams.values().forEach(CHOAM::stop);
             routers.values().forEach(e -> e.close(Duration.ofSeconds(0)));
 
             System.out.println("Final block height: " + members.stream()
-                                                               .map(m -> updaters.get(m))
-                                                               .map(ssm -> ssm.getCurrentBlock())
-                                                               .filter(cb -> cb != null)
-                                                               .map(cb -> cb.height())
+                                                               .map(updaters::get)
+                                                               .map(SqlStateMachine::getCurrentBlock)
+                                                               .filter(Objects::nonNull)
+                                                               .map(SqlStateMachine.Current::height)
                                                                .toList());
         }
         final ULong target = updaters.values()
                                      .stream()
-                                     .map(ssm -> ssm.getCurrentBlock())
-                                     .filter(cb -> cb != null)
-                                     .map(cb -> cb.height())
-                                     .max((a, b) -> a.compareTo(b))
+                                     .map(SqlStateMachine::getCurrentBlock)
+                                     .filter(Objects::nonNull)
+                                     .map(SqlStateMachine.Current::height)
+                                     .max(ULong::compareTo)
                                      .get();
         assertEquals(members.stream()
-                            .map(m -> updaters.get(m))
-                            .map(ssm -> ssm.getCurrentBlock())
-                            .filter(cb -> cb != null)
-                            .map(cb -> cb.height())
+                            .map(updaters::get)
+                            .map(SqlStateMachine::getCurrentBlock)
+                            .filter(Objects::nonNull)
+                            .map(SqlStateMachine.Current::height)
                             .filter(l -> l.compareTo(target) == 0)
                             .count(), members.size(), "members did not end at same block: " + updaters.values()
                                                                                                       .stream()
                                                                                                       .map(
-                                                                                                      ssm -> ssm.getCurrentBlock())
+                                                                                                      SqlStateMachine::getCurrentBlock)
                                                                                                       .filter(
-                                                                                                      cb -> cb != null)
+                                                                                                      Objects::nonNull)
                                                                                                       .map(
-                                                                                                      cb -> cb.height())
+                                                                                                      SqlStateMachine.Current::height)
                                                                                                       .toList());
 
         record row(float price, int quantity) {
@@ -289,7 +285,7 @@ public class CHOAMTest {
             connection.close();
         }
 
-        Map<Integer, row> standard = manifested.get(members.get(0));
+        Map<Integer, row> standard = manifested.get(members.getFirst());
         for (Member m : members) {
             var candidate = manifested.get(m);
             for (var entry : standard.entrySet()) {

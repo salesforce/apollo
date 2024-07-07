@@ -152,29 +152,27 @@ abstract public class AbstractLifecycleTest {
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> {
             return stereotomy.newIdentifier();
-        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).collect(Collectors.toList());
-        System.out.println("Members: " + members.stream().map(s -> s.getId()).toList());
+        }).map(ControlledIdentifierMember::new).map(e -> (SigningMember) e).collect(Collectors.toList());
+        System.out.println("Members: " + members.stream().map(Member::getId).toList());
         members.forEach(m -> context.activate(m));
 
         testSubject = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder().setTarget(30),
-                                                                executor);
-            return localRouter;
-        }));
+        routers = members.stream()
+                         .collect(Collectors.toMap(Member::getId, m -> new LocalServer(prefix, m).router(
+                         ServerConnectionCache.newBuilder().setTarget(30), executor)));
         routers.put(testSubject.getId(),
                     new LocalServer(prefix, testSubject).router(ServerConnectionCache.newBuilder().setTarget(30)));
         choams = members.stream()
-                        .collect(Collectors.toMap(m -> m.getId(),
+                        .collect(Collectors.toMap(Member::getId,
                                                   m -> createChoam(entropy, params, m, m.equals(testSubject),
                                                                    context)));
         choams.put(testSubject.getId(), createChoam(entropy, params, testSubject, true, context));
         members.stream().filter(m -> !m.equals(testSubject)).forEach(m -> context.activate(m));
         System.out.println(
-        "test subject: " + testSubject.getId() + "\nmembers: " + members.stream().map(e -> e.getId()).toList());
+        "test subject: " + testSubject.getId() + "\nmembers: " + members.stream().map(Member::getId).toList());
     }
 
     protected abstract int checkpointBlockSize();
@@ -279,19 +277,19 @@ abstract public class AbstractLifecycleTest {
     protected void pre() throws Exception {
 
         final Duration timeout = Duration.ofSeconds(6);
-        transactioneers = new ArrayList<Transactioneer>();
+        transactioneers = new ArrayList<>();
         final CountDownLatch countdown = new CountDownLatch(1);
 
         routers.entrySet()
                .stream()
                .filter(e -> !e.getKey().equals(testSubject.getId()))
-               .map(e -> e.getValue())
-               .forEach(r -> r.start());
+               .map(Map.Entry::getValue)
+               .forEach(Router::start);
         choams.entrySet()
               .stream()
               .filter(e -> !e.getKey().equals(testSubject.getId()))
-              .map(e -> e.getValue())
-              .forEach(ch -> ch.start());
+              .map(Map.Entry::getValue)
+              .forEach(CHOAM::start);
 
         var txneer = updaters.get(members.getLast());
 
@@ -300,16 +298,15 @@ abstract public class AbstractLifecycleTest {
                                                                                 .filter(e -> !e.getKey()
                                                                                                .equals(
                                                                                                testSubject.getId()))
-                                                                                .map(e -> e.getValue())
-                                                                                .filter(c -> !c.active())
-                                                                                .count() == 0);
+                                                                                .map(Map.Entry::getValue)
+                                                                                .allMatch(CHOAM::active));
         assertTrue(activated, "Group did not become active: " + (choams.entrySet()
                                                                        .stream()
                                                                        .filter(
                                                                        e -> !e.getKey().equals(testSubject.getId()))
-                                                                       .map(e -> e.getValue())
+                                                                       .map(Map.Entry::getValue)
                                                                        .filter(c -> !c.active())
-                                                                       .map(c -> c.logState())
+                                                                       .map(CHOAM::logState)
                                                                        .toList()));
 
         var mutator = txneer.getMutator(choams.get(members.getLast().getId()).getSession());
@@ -317,10 +314,11 @@ abstract public class AbstractLifecycleTest {
         new Transactioneer(scheduler, () -> update(entropy, mutator), mutator, timeout, 1, countdown));
         System.out.println("Transaction member: " + members.getLast().getId());
         System.out.println("Starting txns");
-        transactioneers.stream().forEach(e -> e.start());
+        transactioneers.forEach(Transactioneer::start);
         var success = countdown.await(60, TimeUnit.SECONDS);
-        assertTrue(success,
-                   "Did not complete transactions: " + (transactioneers.stream().mapToInt(t -> t.completed()).sum()));
+        assertTrue(success, "Did not complete transactions: " + (transactioneers.stream()
+                                                                                .mapToInt(Transactioneer::completed)
+                                                                                .sum()));
 
     }
 
