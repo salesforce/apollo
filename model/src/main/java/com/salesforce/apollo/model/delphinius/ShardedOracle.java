@@ -9,6 +9,7 @@ package com.salesforce.apollo.model.delphinius;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.delphinius.AbstractOracle;
 import com.salesforce.apollo.state.Mutator;
+import org.joou.ULong;
 
 import java.sql.Connection;
 import java.time.Duration;
@@ -33,7 +34,7 @@ public class ShardedOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> add(Assertion assertion) {
+    public CompletableFuture<ULong> add(Assertion assertion) {
         var call = mutator.call("call delphinius.addAssertion(?, ?, ?, ?, ?, ?, ?, ?) ",
                                 assertion.subject().namespace().name(), assertion.subject().name(),
                                 assertion.subject().relation().namespace().name(),
@@ -43,84 +44,84 @@ public class ShardedOracle extends AbstractOracle {
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> add(Namespace namespace) {
+    public CompletableFuture<ULong> add(Namespace namespace) {
         var call = mutator.call("call delphinius.addNamespace(?) ", namespace.name());
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> add(Object object) {
+    public CompletableFuture<ULong> add(Object object) {
         var call = mutator.call("call delphinius.addObject(?, ?, ?, ?) ", object.namespace().name(), object.name(),
                                 object.relation().namespace().name(), object.relation().name());
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> add(Relation relation) {
+    public CompletableFuture<ULong> add(Relation relation) {
         var call = mutator.call("call delphinius.addRelation(?, ?) ", relation.namespace().name(), relation.name());
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> add(Subject subject) {
+    public CompletableFuture<ULong> add(Subject subject) {
         var call = mutator.call("call delphinius.addSubject(?, ?, ?, ?) ", subject.namespace().name(), subject.name(),
                                 subject.relation().namespace().name(), subject.relation().name());
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
-    public CompletableFuture<Void> add(Assertion assertion, int retries) {
+    public CompletableFuture<ULong> add(Assertion assertion, int retries) {
         return retryNesting(() -> add(assertion), retries);
     }
 
-    public CompletableFuture<Void> add(Namespace namespace, int retries) {
+    public CompletableFuture<ULong> add(Namespace namespace, int retries) {
         return retryNesting(() -> add(namespace), retries);
     }
 
-    public CompletableFuture<Void> add(Object object, int retries) {
+    public CompletableFuture<ULong> add(Object object, int retries) {
         return retryNesting(() -> add(object), retries);
     }
 
-    public CompletableFuture<Void> add(Relation relation, int retries) {
+    public CompletableFuture<ULong> add(Relation relation, int retries) {
         return retryNesting(() -> add(relation), retries);
     }
 
-    public CompletableFuture<Void> add(Subject subject, int retries) {
+    public CompletableFuture<ULong> add(Subject subject, int retries) {
         return retryNesting(() -> add(subject), retries);
     }
 
     @Override
-    public CompletableFuture<Void> delete(Assertion assertion) {
+    public CompletableFuture<ULong> delete(Assertion assertion) {
         var call = mutator.call("call delphinius.deleteAssertion(?, ?, ?, ?, ?, ?, ?, ?) ",
                                 assertion.subject().namespace().name(), assertion.subject().name(),
                                 assertion.subject().relation().namespace().name(),
@@ -130,84 +131,84 @@ public class ShardedOracle extends AbstractOracle {
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> delete(Namespace namespace) {
+    public CompletableFuture<ULong> delete(Namespace namespace) {
         var call = mutator.call("call delphinius.deleteNamespace(?) ", namespace.name());
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> delete(Object object) {
+    public CompletableFuture<ULong> delete(Object object) {
         var call = mutator.call("call delphinius.deleteObject(?, ?, ?, ?) ", object.namespace().name(), object.name(),
                                 object.relation().namespace().name(), object.relation().name());
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> delete(Relation relation) {
+    public CompletableFuture<ULong> delete(Relation relation) {
         var call = mutator.call("call delphinius.deleteRelation(?, ?) ", relation.namespace().name(), relation.name());
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> delete(Subject subject) {
+    public CompletableFuture<ULong> delete(Subject subject) {
         var call = mutator.call("call delphinius.deleteSubject(?, ?, ?, ?) ", subject.namespace().name(),
                                 subject.name(), subject.relation().namespace().name(), subject.relation().name());
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
-    public CompletableFuture<Void> delete(Assertion assertion, int retries) {
+    public CompletableFuture<ULong> delete(Assertion assertion, int retries) {
         return retryNesting(() -> delete(assertion), retries);
     }
 
-    public CompletableFuture<Void> delete(Namespace namespace, int retries) {
+    public CompletableFuture<ULong> delete(Namespace namespace, int retries) {
         return retryNesting(() -> delete(namespace), retries);
     }
 
-    public CompletableFuture<Void> delete(Object object, int retries) {
+    public CompletableFuture<ULong> delete(Object object, int retries) {
         return retryNesting(() -> delete(object), retries);
     }
 
-    public CompletableFuture<Void> delete(Relation relation, int retries) {
+    public CompletableFuture<ULong> delete(Relation relation, int retries) {
         return retryNesting(() -> delete(relation), retries);
     }
 
-    public CompletableFuture<Void> delete(Subject subject, int retries) {
+    public CompletableFuture<ULong> delete(Subject subject, int retries) {
         return retryNesting(() -> delete(subject), retries);
     }
 
     @Override
-    public CompletableFuture<Void> map(Object parent, Object child) {
+    public CompletableFuture<ULong> map(Object parent, Object child) {
         var call = mutator.call("call delphinius.mapObject(?, ?, ?, ?, ?, ?, ?, ?) ", parent.namespace().name(),
                                 parent.name(), parent.relation().namespace().name(), parent.relation().name(),
                                 child.namespace().name(), child.name(), child.relation().namespace().name(),
@@ -215,27 +216,27 @@ public class ShardedOracle extends AbstractOracle {
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> map(Relation parent, Relation child) {
+    public CompletableFuture<ULong> map(Relation parent, Relation child) {
         var call = mutator.call("call delphinius.mapRelation(?, ?, ?, ?)", parent.namespace().name(), parent.name(),
                                 child.namespace().name(), child.name());
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> map(Subject parent, Subject child) {
+    public CompletableFuture<ULong> map(Subject parent, Subject child) {
         var call = mutator.call("call delphinius.mapSubject(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ",
                                 parent.namespace().name(), parent.name(), parent.relation().namespace().name(),
                                 parent.relation().name(), child.namespace().name(), child.name(),
@@ -243,26 +244,26 @@ public class ShardedOracle extends AbstractOracle {
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
-    public CompletableFuture<Void> map(Object parent, Object child, int retries) {
+    public CompletableFuture<ULong> map(Object parent, Object child, int retries) {
         return retryNesting(() -> map(parent, child), retries);
     }
 
-    public CompletableFuture<Void> map(Relation parent, Relation child, int retries) {
+    public CompletableFuture<ULong> map(Relation parent, Relation child, int retries) {
         return retryNesting(() -> map(parent, child), retries);
     }
 
-    public CompletableFuture<Void> map(Subject parent, Subject child, int retries) {
+    public CompletableFuture<ULong> map(Subject parent, Subject child, int retries) {
         return retryNesting(() -> map(parent, child), retries);
     }
 
     @Override
-    public CompletableFuture<Void> remove(Object parent, Object child) {
+    public CompletableFuture<ULong> remove(Object parent, Object child) {
         var call = mutator.call("call delphinius.removeObject(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ",
                                 parent.namespace().name(), parent.name(), parent.relation().namespace().name(),
                                 parent.relation().name(), child.namespace().name(), child.name(),
@@ -270,27 +271,27 @@ public class ShardedOracle extends AbstractOracle {
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> remove(Relation parent, Relation child) {
+    public CompletableFuture<ULong> remove(Relation parent, Relation child) {
         var call = mutator.call("call delphinius.removeRelation(?, ?, ?, ?) ", parent.namespace().name(), parent.name(),
                                 child.namespace().name(), child.name());
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
     @Override
-    public CompletableFuture<Void> remove(Subject parent, Subject child) {
+    public CompletableFuture<ULong> remove(Subject parent, Subject child) {
         var call = mutator.call("call delphinius.removeSubject(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ",
                                 parent.namespace().name(), parent.name(), parent.relation().namespace().name(),
                                 parent.relation().name(), child.namespace().name(), child.name(),
@@ -298,21 +299,21 @@ public class ShardedOracle extends AbstractOracle {
         try {
             return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
+            var f = new CompletableFuture<ULong>();
             f.completeExceptionally(e);
             return f;
         }
     }
 
-    public CompletableFuture<Void> remove(Object parent, Object child, int retries) {
+    public CompletableFuture<ULong> remove(Object parent, Object child, int retries) {
         return retryNesting(() -> remove(parent, child), retries);
     }
 
-    public CompletableFuture<Void> remove(Relation parent, Relation child, int retries) {
+    public CompletableFuture<ULong> remove(Relation parent, Relation child, int retries) {
         return retryNesting(() -> remove(parent, child), retries);
     }
 
-    public CompletableFuture<Void> remove(Subject parent, Subject child, int retries) {
+    public CompletableFuture<ULong> remove(Subject parent, Subject child, int retries) {
         return retryNesting(() -> remove(parent, child), retries);
     }
 
