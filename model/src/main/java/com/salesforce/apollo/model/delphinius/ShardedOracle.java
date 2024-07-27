@@ -12,6 +12,7 @@ import com.salesforce.apollo.state.Mutator;
 import org.joou.ULong;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -121,6 +122,14 @@ public class ShardedOracle extends AbstractOracle {
 
     public CompletableFuture<ULong> add(Subject subject, int retries) {
         return retryNesting(() -> add(subject), retries);
+    }
+
+    @Override
+    public boolean check(Assertion assertion, ULong valid) throws SQLException {
+        if (valid.compareTo(clock.get()) > 0) {
+            return false;
+        }
+        return check(assertion);
     }
 
     @Override

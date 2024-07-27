@@ -9,6 +9,7 @@ package com.salesforce.apollo.delphinius;
 import org.joou.ULong;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
@@ -124,6 +125,14 @@ public class CallOracle extends AbstractOracle {
             fs.completeExceptionally(e);
         }
         return fs;
+    }
+
+    @Override
+    public boolean check(Assertion assertion, ULong valid) throws SQLException {
+        if (valid.compareTo(clock.get()) > 0) {
+            return false;
+        }
+        return check(assertion);
     }
 
     @Override

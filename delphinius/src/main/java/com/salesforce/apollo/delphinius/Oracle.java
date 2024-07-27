@@ -63,7 +63,15 @@ public interface Oracle {
     CompletableFuture<ULong> add(Subject subject);
 
     /**
-     * Check the assertion.
+     * Check the assertion is true at the valid time
+     *
+     * @param valid - the time stamp at which the assertion is valid
+     * @return true if the assertion is made, false if not
+     */
+    boolean check(Assertion assertion, ULong valid) throws SQLException;
+
+    /**
+     * Check the assertion is true at the current time
      *
      * @return true if the assertion is made, false if not
      */

@@ -194,9 +194,9 @@ public class DomainTest {
         }
 
         // Check some assertions
-        assertTrue(oracle.check(object123View.assertion(jale)));
-        assertTrue(oracle.check(object123View.assertion(egin)));
-        assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
+        assertTrue(oracle.check(object123View.assertion(jale), t2));
+        assertTrue(oracle.check(object123View.assertion(egin), t2));
+        assertFalse(oracle.check(object123View.assertion(helpDeskMembers), t2));
 
         // Remove them
         retryNesting(() -> oracle.remove(abcTechMembers, technicianMembers), 3).get(120, TimeUnit.SECONDS);
