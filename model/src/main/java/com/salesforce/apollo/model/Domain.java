@@ -58,6 +58,7 @@ import static java.nio.file.Path.of;
  * @author hal.hildebrand
  */
 abstract public class Domain {
+
     private static final Logger log = LoggerFactory.getLogger(Domain.class);
 
     protected final CHOAM                      choam;
@@ -96,7 +97,9 @@ abstract public class Domain {
         choam = new CHOAM(this.params);
         mutator = sqlStateMachine.getMutator(choam.getSession());
         stateConnection = sqlStateMachine.newConnection();
-        this.oracle = new ShardedOracle(stateConnection, mutator, params.getSubmitTimeout());
+        this.oracle = new ShardedOracle(stateConnection, mutator, params.getSubmitTimeout(),
+                                        //                              () -> ULong.valueOf(System.currentTimeMillis()));
+                                        () -> sqlStateMachine.getCurrentBlock().height());
         log.info("Domain: {} member: {} db URL: {} checkpoint base dir: {}", this.params.context().getId(),
                  member.getId(), dbURL, checkpointBaseDir);
     }

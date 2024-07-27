@@ -13,21 +13,28 @@ import org.joou.ULong;
 
 import java.sql.Connection;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 /**
  * @author hal.hildebrand
  */
 public class DirectOracle extends AbstractOracle {
 
-    private final DSLContext dslCtx;
+    private final DSLContext      dslCtx;
+    private final Supplier<ULong> clock;
 
     public DirectOracle(Connection connection) {
-        this(DSL.using(connection, SQLDialect.H2));
+        this(connection, () -> ULong.valueOf(System.currentTimeMillis()));
     }
 
-    public DirectOracle(DSLContext dslCtx) {
+    public DirectOracle(Connection connection, Supplier<ULong> clock) {
+        this(DSL.using(connection, SQLDialect.H2), clock);
+    }
+
+    public DirectOracle(DSLContext dslCtx, Supplier<ULong> clock) {
         super(dslCtx);
         this.dslCtx = dslCtx;
+        this.clock = clock;
     }
 
     /**
@@ -38,7 +45,7 @@ public class DirectOracle extends AbstractOracle {
             add(DSL.using(ctx), assertion);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -50,7 +57,7 @@ public class DirectOracle extends AbstractOracle {
             add(DSL.using(ctx), namespace);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -62,7 +69,7 @@ public class DirectOracle extends AbstractOracle {
             add(DSL.using(ctx), object);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -74,7 +81,7 @@ public class DirectOracle extends AbstractOracle {
             add(DSL.using(ctx), relation);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -86,7 +93,7 @@ public class DirectOracle extends AbstractOracle {
             add(DSL.using(ctx), subject);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -98,7 +105,7 @@ public class DirectOracle extends AbstractOracle {
             delete(DSL.using(ctx), assertion);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -112,24 +119,24 @@ public class DirectOracle extends AbstractOracle {
             delete(DSL.using(ctx), namespace);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
     /**
-     * Delete an Object. All dependant uses of the object (mappings, Assertions) are removed as well.
+     * Delete an Object. All dependent uses of the object (mappings, Assertions) are removed as well.
      */
     public CompletableFuture<ULong> delete(Object object) {
         dslCtx.transaction(ctx -> {
             delete(DSL.using(ctx), object);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
     /**
-     * Delete an Relation. All dependant uses of the relation (mappings, Subject, Object and Assertions) are removed as
+     * Delete an Relation. All dependent uses of the relation (mappings, Subject, Object and Assertions) are removed as
      * well.
      */
     public CompletableFuture<ULong> delete(Relation relation) {
@@ -137,7 +144,7 @@ public class DirectOracle extends AbstractOracle {
             delete(DSL.using(ctx), relation);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -149,7 +156,7 @@ public class DirectOracle extends AbstractOracle {
             delete(DSL.using(ctx), subject);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -161,7 +168,7 @@ public class DirectOracle extends AbstractOracle {
             map(parent, DSL.using(ctx), child);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -173,7 +180,7 @@ public class DirectOracle extends AbstractOracle {
             map(parent, DSL.using(ctx), child);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -185,7 +192,7 @@ public class DirectOracle extends AbstractOracle {
             map(parent, DSL.using(ctx), child);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -197,7 +204,7 @@ public class DirectOracle extends AbstractOracle {
             remove(parent, DSL.using(ctx), child);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -209,7 +216,7 @@ public class DirectOracle extends AbstractOracle {
             remove(parent, DSL.using(ctx), child);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 
@@ -221,7 +228,7 @@ public class DirectOracle extends AbstractOracle {
             remove(parent, DSL.using(ctx), child);
         });
         var fs = new CompletableFuture<ULong>();
-        fs.complete(null);
+        fs.complete(clock.get());
         return fs;
     }
 }

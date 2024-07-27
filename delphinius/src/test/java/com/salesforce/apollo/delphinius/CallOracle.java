@@ -10,6 +10,7 @@ import org.joou.ULong;
 
 import java.sql.Connection;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 /**
  * Oracle where write ops are JDBC stored procedure calls
@@ -18,11 +19,17 @@ import java.util.concurrent.CompletableFuture;
  */
 public class CallOracle extends AbstractOracle {
 
-    private final Connection connection;
+    private final Connection      connection;
+    private final Supplier<ULong> clock;
 
     public CallOracle(Connection connection) {
+        this(connection, () -> ULong.valueOf(System.currentTimeMillis()));
+    }
+
+    public CallOracle(Connection connection, Supplier<ULong> clock) {
         super(connection);
         this.connection = connection;
+        this.clock = clock;
     }
 
     @Override
@@ -41,7 +48,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -57,7 +64,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -76,7 +83,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -93,7 +100,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -112,7 +119,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -135,7 +142,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -151,7 +158,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -170,7 +177,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -187,7 +194,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -206,7 +213,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -229,7 +236,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -248,7 +255,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -271,7 +278,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -294,7 +301,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -313,7 +320,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -336,7 +343,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
