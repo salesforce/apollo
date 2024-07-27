@@ -10,12 +10,11 @@ import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.model.Domain;
 import com.salesforce.apollo.state.Emulator;
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -31,7 +30,8 @@ public class ShardedOracleTest {
 
         emmy.start(Domain.boostrapMigration());
 
-        ShardedOracle oracle = new ShardedOracle(emmy.newConnector(), emmy.getMutator(), timeout);
+        ShardedOracle oracle = new ShardedOracle(emmy.newConnector(), emmy.getMutator(), timeout,
+                                                 () -> ULong.valueOf(System.currentTimeMillis()));
         smoke(oracle);
     }
 

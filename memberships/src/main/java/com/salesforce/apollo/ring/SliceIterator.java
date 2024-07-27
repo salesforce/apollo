@@ -105,10 +105,18 @@ public class SliceIterator<Comm extends Link> {
             try {
                 result = round.apply(link);
             } catch (StatusRuntimeException e) {
-                log.trace("Error: {} applying: <{}> slice to: {} iteration: {} on: {}", e, label,
-                          link.getMember().getId(), c, member.getId());
+                switch (e.getStatus().getCode()) {
+                case UNAVAILABLE:
+                    log.trace("Unhandled: {} applying: <{}> slice to: {} iteration: {} on: {}", e, label,
+                              link.getMember().getId(), c, member.getId());
+                    break;
+                default:
+                    log.debug("Unhandled: {} applying: <{}> slice to: {} iteration: {} on: {}", e, label,
+                              link.getMember().getId(), c, member.getId());
+                    break;
+                }
             } catch (Throwable e) {
-                log.error("Unhandled: {} applying: <{}> slice to: {} iteration: {} on: {}", e, label,
+                log.debug("Unhandled: {} applying: <{}> slice to: {} iteration: {} on: {}", e, label,
                           link.getMember().getId(), c, member.getId());
             }
             allowed.accept(handler.handle(Optional.ofNullable(result), tally, link, link.getMember()));

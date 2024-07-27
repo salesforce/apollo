@@ -6,27 +6,36 @@
  */
 package com.salesforce.apollo.delphinius;
 
+import org.joou.ULong;
+
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 /**
  * Oracle where write ops are JDBC stored procedure calls
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public class CallOracle extends AbstractOracle {
 
-    private final Connection connection;
+    private final Connection      connection;
+    private final Supplier<ULong> clock;
 
     public CallOracle(Connection connection) {
+        this(connection, () -> ULong.valueOf(System.currentTimeMillis()));
+    }
+
+    public CallOracle(Connection connection, Supplier<ULong> clock) {
         super(connection);
         this.connection = connection;
+        this.clock = clock;
     }
 
     @Override
-    public CompletableFuture<Void> add(Assertion assertion) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> add(Assertion assertion) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.addAssertion(?, ?, ?, ?, ?, ?, ?, ?) ");
             call.setString(1, assertion.subject().namespace().name());
@@ -40,7 +49,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -48,15 +57,15 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> add(Namespace namespace) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> add(Namespace namespace) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.addNamespace(?) ");
             call.setString(1, namespace.name());
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -64,8 +73,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> add(Object object) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> add(Object object) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.addObject(?, ?, ?, ?) ");
             call.setString(1, object.namespace().name());
@@ -75,7 +84,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -83,8 +92,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> add(Relation relation) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> add(Relation relation) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.addRelation(?, ?) ");
             call.setString(1, relation.namespace().name());
@@ -92,7 +101,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -100,8 +109,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> add(Subject subject) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> add(Subject subject) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.addSubject(?, ?, ?, ?) ");
             call.setString(1, subject.namespace().name());
@@ -111,7 +120,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -119,8 +128,16 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> delete(Assertion assertion) {
-        var fs = new CompletableFuture<Void>();
+    public boolean check(Assertion assertion, ULong valid) throws SQLException {
+        if (valid.compareTo(clock.get()) > 0) {
+            return false;
+        }
+        return check(assertion);
+    }
+
+    @Override
+    public CompletableFuture<ULong> delete(Assertion assertion) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.deleteAssertion(?, ?, ?, ?, ?, ?, ?, ?) ");
             call.setString(1, assertion.subject().namespace().name());
@@ -134,7 +151,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -142,15 +159,15 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> delete(Namespace namespace) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> delete(Namespace namespace) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.deleteNamespace(?) ");
             call.setString(1, namespace.name());
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -158,8 +175,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> delete(Object object) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> delete(Object object) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.deleteObject(?, ?, ?, ?) ");
             call.setString(1, object.namespace().name());
@@ -169,7 +186,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -177,8 +194,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> delete(Relation relation) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> delete(Relation relation) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.deleteRelation(?, ?) ");
             call.setString(1, relation.namespace().name());
@@ -186,7 +203,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -194,8 +211,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> delete(Subject subject) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> delete(Subject subject) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.deleteSubject(?, ?, ?, ?) ");
             call.setString(1, subject.namespace().name());
@@ -205,7 +222,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -213,8 +230,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> map(Object parent, Object child) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> map(Object parent, Object child) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.mapObject(?, ?, ?, ?, ?, ?, ?, ?) ");
             call.setString(1, parent.namespace().name());
@@ -228,7 +245,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -236,8 +253,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> map(Relation parent, Relation child) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> map(Relation parent, Relation child) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareStatement("call delphinius.mapRelation(?, ?, ?, ?)");
             call.setString(1, parent.namespace().name());
@@ -247,7 +264,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -255,8 +272,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> map(Subject parent, Subject child) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> map(Subject parent, Subject child) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareStatement(" call delphinius.mapSubject(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ");
             call.setString(1, parent.namespace().name());
@@ -270,7 +287,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -278,8 +295,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> remove(Object parent, Object child) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> remove(Object parent, Object child) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.removeObject(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ");
             call.setString(1, parent.namespace().name());
@@ -293,7 +310,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -301,8 +318,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> remove(Relation parent, Relation child) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> remove(Relation parent, Relation child) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.removeRelation(?, ?, ?, ?) ");
             call.setString(1, parent.namespace().name());
@@ -312,7 +329,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -320,8 +337,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<Void> remove(Subject parent, Subject child) {
-        var fs = new CompletableFuture<Void>();
+    public CompletableFuture<ULong> remove(Subject parent, Subject child) {
+        var fs = new CompletableFuture<ULong>();
         try {
             var call = connection.prepareCall("call delphinius.removeSubject(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ");
             call.setString(1, parent.namespace().name());
@@ -335,7 +352,7 @@ public class CallOracle extends AbstractOracle {
 
             call.execute();
             connection.commit();
-            fs.complete(null);
+            fs.complete(clock.get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }

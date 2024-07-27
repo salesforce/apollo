@@ -26,6 +26,8 @@ import com.salesforce.apollo.utils.Utils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.security.SecureRandom;
@@ -47,12 +49,14 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author hal.hildebrand
  */
 public class DomainTest {
-    private static final int               CARDINALITY     = 5;
-    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest(
+    private static final Logger log             = LoggerFactory.getLogger(DomainTest.class);
+    private static final int    CARDINALITY     = 5;
+    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest(
     "Give me food or give me slack or kill me".getBytes());
-    private final        ArrayList<Domain> domains         = new ArrayList<>();
-    private final        ArrayList<Router> routers         = new ArrayList<>();
-    private              ExecutorService   executor;
+
+    private final ArrayList<Domain> domains = new ArrayList<>();
+    private final ArrayList<Router> routers = new ArrayList<>();
+    private       ExecutorService   executor;
 
     public static void smoke(Oracle oracle) throws Exception {
         // Namespace
@@ -62,7 +66,7 @@ public class DomainTest {
         var member = ns.relation("member");
         var flag = ns.relation("flag");
 
-        // Group membersip
+        // Group membership
         var userMembers = ns.subject("Users", member);
         var adminMembers = ns.subject("Admins", member);
         var helpDeskMembers = ns.subject("HelpDesk", member);
@@ -91,8 +95,10 @@ public class DomainTest {
 
         try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
 
-            retryNesting(() -> oracle.map(helpDeskMembers, adminMembers), 3).whenCompleteAsync(
-            (_, _) -> countDown.countDown(), exec);
+            retryNesting(() -> oracle.map(helpDeskMembers, adminMembers), 3).whenCompleteAsync((h, _) -> {
+                log.info("mapping helpdesk members to admin @ {}", h.longValue());
+                countDown.countDown();
+            }, exec);
             retryNesting(() -> oracle.map(ali, adminMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
                                                                                    exec);
             retryNesting(() -> oracle.map(ali, userMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
@@ -126,7 +132,7 @@ public class DomainTest {
             retryNesting(() -> oracle.map(jale, abcTechMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
                                                                                       exec);
 
-            countDown.await(120, TimeUnit.SECONDS);
+            assertTrue(countDown.await(120, TimeUnit.SECONDS));
         }
 
         // Protected resource namespace
@@ -138,7 +144,8 @@ public class DomainTest {
 
         // Users can View Document 123
         Assertion tuple = userMembers.assertion(object123View);
-        retryNesting(() -> oracle.add(tuple), 3).get(120, TimeUnit.SECONDS);
+        var t1 = retryNesting(() -> oracle.add(tuple), 3).get(120, TimeUnit.SECONDS).longValue();
+        log.info("Users can view documents @ {}", t1);
 
         // Direct subjects that can View the document
         var viewers = oracle.read(object123View);
@@ -152,7 +159,8 @@ public class DomainTest {
 
         // Assert flagged technicians can directly view the document
         Assertion grantTechs = flaggedTechnicianMembers.assertion(object123View);
-        retryNesting(() -> oracle.add(grantTechs), 3).get(120, TimeUnit.SECONDS);
+        var t2 = retryNesting(() -> oracle.add(grantTechs), 3).get(120, TimeUnit.SECONDS);
+        log.info("flagged technicians can directly view documents @ {}", t2);
 
         // Now have 2 direct subjects that can view the doc
         viewers = oracle.read(object123View);
@@ -186,9 +194,9 @@ public class DomainTest {
         }
 
         // Check some assertions
-        assertTrue(oracle.check(object123View.assertion(jale)));
-        assertTrue(oracle.check(object123View.assertion(egin)));
-        assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
+        assertTrue(oracle.check(object123View.assertion(jale), t2));
+        assertTrue(oracle.check(object123View.assertion(egin), t2));
+        assertFalse(oracle.check(object123View.assertion(helpDeskMembers), t2));
 
         // Remove them
         retryNesting(() -> oracle.remove(abcTechMembers, technicianMembers), 3).get(120, TimeUnit.SECONDS);
@@ -198,7 +206,8 @@ public class DomainTest {
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
         // Remove our assertion
-        retryNesting(() -> oracle.delete(tuple), 3).get(120, TimeUnit.SECONDS);
+        var t3 = retryNesting(() -> oracle.delete(tuple), 3).get(120, TimeUnit.SECONDS);
+        log.info("Removed assertions: {} @ {}", tuple, t3);
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertFalse(oracle.check(object123View.assertion(egin)));
@@ -234,7 +243,7 @@ public class DomainTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
         var identities = IntStream.range(0, CARDINALITY)
-                                  .mapToObj(i -> stereotomy.newIdentifier())
+                                  .mapToObj(_ -> stereotomy.newIdentifier())
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));
 
@@ -280,24 +289,22 @@ public class DomainTest {
     }
 
     private Builder params() {
-        var template = Parameters.newBuilder()
-                                 .setGenerateGenesis(true)
-                                 .setGenesisViewId(GENESIS_VIEW_ID)
-                                 .setBootstrap(Parameters.BootstrapParameters.newBuilder()
-                                                                             .setGossipDuration(Duration.ofMillis(5))
-                                                                             .build())
-                                 .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
-                                 .setGossipDuration(Duration.ofMillis(5))
-                                 .setProducer(Parameters.ProducerParameters.newBuilder()
-                                                                           .setGossipDuration(Duration.ofMillis(5))
-                                                                           .setBatchInterval(Duration.ofMillis(50))
-                                                                           .setMaxBatchByteSize(1024 * 1024)
-                                                                           .setMaxBatchCount(10_000)
-                                                                           .setEthereal(Config.newBuilder()
-                                                                                              .setNumberOfEpochs(12)
-                                                                                              .setEpochLength(33))
-                                                                           .build())
-                                 .setCheckpointBlockDelta(200);
-        return template;
+        return Parameters.newBuilder()
+                         .setGenerateGenesis(true)
+                         .setGenesisViewId(GENESIS_VIEW_ID)
+                         .setBootstrap(
+                         Parameters.BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(5)).build())
+                         .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
+                         .setGossipDuration(Duration.ofMillis(5))
+                         .setProducer(Parameters.ProducerParameters.newBuilder()
+                                                                   .setGossipDuration(Duration.ofMillis(5))
+                                                                   .setBatchInterval(Duration.ofMillis(50))
+                                                                   .setMaxBatchByteSize(1024 * 1024)
+                                                                   .setMaxBatchCount(10_000)
+                                                                   .setEthereal(Config.newBuilder()
+                                                                                      .setNumberOfEpochs(12)
+                                                                                      .setEpochLength(33))
+                                                                   .build())
+                         .setCheckpointBlockDelta(200);
     }
 }
