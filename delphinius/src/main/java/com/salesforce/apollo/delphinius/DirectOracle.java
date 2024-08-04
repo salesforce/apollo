@@ -39,14 +39,14 @@ public class DirectOracle extends AbstractOracle {
     }
 
     /**
-     * Add an Assertion. The subject and object of the assertion will also be added if they do not exist
+     * Add an Assertion. The subject and object of the assertion will also be added if they do not exist.
+     *
+     * @return the time stamp of the addition attempt, and whether the assertion was added or previously existed
      */
-    public CompletableFuture<ULong> add(Assertion assertion) {
-        dslCtx.transaction(ctx -> {
-            add(DSL.using(ctx), assertion);
-        });
-        var fs = new CompletableFuture<ULong>();
-        fs.complete(clock.get());
+    public CompletableFuture<Asserted> add(Assertion assertion) {
+        var added = dslCtx.transactionResult(ctx -> add(DSL.using(ctx), assertion));
+        var fs = new CompletableFuture<Asserted>();
+        fs.complete(new Asserted(clock.get(), added));
         return fs;
     }
 

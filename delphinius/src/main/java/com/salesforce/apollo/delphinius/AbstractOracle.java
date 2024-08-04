@@ -65,17 +65,17 @@ abstract public class AbstractOracle implements Oracle {
         this.dslCtx = dslCtx;
     }
 
-    public static void addAssertion(Connection connection, String subjectNamespace, String subjectName,
-                                    String subjectRelationNamespace, String subjectRelationName, String objectNamespace,
-                                    String objectName, String objectRelationNamespace, String objectRelationName)
-    throws SQLException {
+    public static boolean addAssertion(Connection connection, String subjectNamespace, String subjectName,
+                                       String subjectRelationNamespace, String subjectRelationName,
+                                       String objectNamespace, String objectName, String objectRelationNamespace,
+                                       String objectRelationName) throws SQLException {
         var subject = new Subject(new Namespace(subjectNamespace), subjectName,
                                   new Relation(new Namespace(subjectRelationNamespace), subjectRelationName));
         var object = new Object(new Namespace(objectNamespace), objectName,
                                 new Relation(new Namespace(objectRelationNamespace), objectRelationName));
         var assertion = subject.assertion(object);
 
-        add(DSL.using(connection, SQLDialect.H2), assertion);
+        return add(DSL.using(connection, SQLDialect.H2), assertion);
     }
 
     public static void addNamespace(Connection connection, String name) throws SQLException {
@@ -213,19 +213,23 @@ abstract public class AbstractOracle implements Oracle {
         remove(parent, DSL.using(connection, SQLDialect.H2), child);
     }
 
-    static void add(DSLContext context, Assertion assertion) throws SQLException {
-        var s = resolve(context, assertion.subject());
+    public static boolean add(DSLContext context, Assertion assertion) throws SQLException {
+        var s = resolveAdd(context, assertion.subject());
         var o = resolveAdd(context, assertion.object());
-        context.mergeInto(ASSERTION)
-               .using(context.selectOne())
-               .on(ASSERTION.SUBJECT.eq(s.id()))
-               .and(ASSERTION.OBJECT.eq(o.id()))
-               .whenNotMatchedThenInsert(ASSERTION.OBJECT, ASSERTION.SUBJECT)
-               .values(o.id(), s.id())
-               .execute();
+        return addAssert(context, s, o);
     }
 
-    static void add(DSLContext context, Namespace namespace) {
+    public static boolean addAssert(DSLContext context, NamespacedId s, NamespacedId o) {
+        return context.mergeInto(ASSERTION)
+                      .using(context.selectOne())
+                      .on(ASSERTION.SUBJECT.eq(s.id()))
+                      .and(ASSERTION.OBJECT.eq(o.id()))
+                      .whenNotMatchedThenInsert(ASSERTION.OBJECT, ASSERTION.SUBJECT)
+                      .values(o.id(), s.id())
+                      .execute() != 0;
+    }
+
+    public static void add(DSLContext context, Namespace namespace) {
         context.mergeInto(NAMESPACE)
                .using(context.selectOne())
                .on(NAMESPACE.NAME.eq(namespace.name()))
@@ -234,43 +238,55 @@ abstract public class AbstractOracle implements Oracle {
                .execute();
     }
 
-    static void add(DSLContext context, Object object) throws SQLException {
+    public static void add(DSLContext context, Object object) throws SQLException {
         var relation = resolveAdd(context, object.relation());
         var namespace = resolveAdd(context, object.namespace());
+        var name = object.name();
+        addObj(context, namespace, name, relation);
+    }
 
+    public static void addObj(DSLContext context, Long namespace, String name, NamespacedId relation) {
         context.mergeInto(OBJECT)
                .using(context.selectOne())
                .on(OBJECT.NAMESPACE.eq(namespace))
-               .and(OBJECT.NAME.eq(object.name()))
+               .and(OBJECT.NAME.eq(name))
                .and(OBJECT.RELATION.eq(relation.id()))
                .whenNotMatchedThenInsert(OBJECT.NAMESPACE, OBJECT.NAME, OBJECT.RELATION)
-               .values(namespace, object.name(), relation.id())
+               .values(namespace, name, relation.id())
                .execute();
     }
 
-    static void add(DSLContext context, Relation relation) throws SQLException {
+    public static void add(DSLContext context, Relation relation) throws SQLException {
         var namespace = resolveAdd(context, relation.namespace());
+        var name = relation.name();
+        addRel(context, namespace, name);
+    }
 
+    public static void addRel(DSLContext context, Long namespace, String name) {
         context.mergeInto(RELATION)
                .using(context.selectOne())
                .on(RELATION.NAMESPACE.eq(namespace))
-               .and(RELATION.NAME.eq(relation.name()))
+               .and(RELATION.NAME.eq(name))
                .whenNotMatchedThenInsert(RELATION.NAMESPACE, RELATION.NAME)
-               .values(namespace, relation.name())
+               .values(namespace, name)
                .execute();
     }
 
-    static void add(DSLContext context, Subject subject) throws SQLException {
+    public static void add(DSLContext context, Subject subject) throws SQLException {
         var namespace = resolveAdd(context, subject.namespace());
         var relation = resolveAdd(context, subject.relation());
+        var name = subject.name();
+        addSubj(context, namespace, name, relation);
+    }
 
+    public static void addSubj(DSLContext context, Long namespace, String name, NamespacedId relation) {
         context.mergeInto(SUBJECT)
                .using(context.selectOne())
                .on(SUBJECT.NAMESPACE.eq(namespace))
-               .and(SUBJECT.NAME.eq(subject.name()))
+               .and(SUBJECT.NAME.eq(name))
                .and(SUBJECT.RELATION.eq(relation.id()))
                .whenNotMatchedThenInsert(SUBJECT.NAMESPACE, SUBJECT.NAME, SUBJECT.RELATION)
-               .values(namespace, subject.name(), relation.id())
+               .values(namespace, name, relation.id())
                .execute();
     }
 
@@ -518,7 +534,7 @@ abstract public class AbstractOracle implements Oracle {
         deleteEdge(context, a.id(), SUBJECT_TYPE, b.id());
     }
 
-    static Long resolve(DSLContext context, Namespace namespace) throws SQLException {
+    public static Long resolve(DSLContext context, Namespace namespace) throws SQLException {
         var resolved = context.select(NAMESPACE.ID)
                               .from(NAMESPACE)
                               .where(NAMESPACE.NAME.eq(namespace.name()))
@@ -529,7 +545,7 @@ abstract public class AbstractOracle implements Oracle {
         return resolved.value1();
     }
 
-    static NamespacedId resolve(DSLContext context, Object object) throws SQLException {
+    public static NamespacedId resolve(DSLContext context, Object object) throws SQLException {
         var namespace = resolve(context, object.namespace());
         if (namespace == null) {
             return null;
@@ -551,7 +567,7 @@ abstract public class AbstractOracle implements Oracle {
         return new NamespacedId(namespace, resolved.value1(), relation.id());
     }
 
-    static NamespacedId resolve(DSLContext context, Relation relation) throws SQLException {
+    public static NamespacedId resolve(DSLContext context, Relation relation) throws SQLException {
         var namespace = resolve(context, relation.namespace());
         if (namespace == null) {
             return null;
@@ -566,7 +582,7 @@ abstract public class AbstractOracle implements Oracle {
         return new NamespacedId(namespace, resolved.value1(), 0L);
     }
 
-    static NamespacedId resolve(DSLContext context, Subject subject) throws SQLException {
+    public static NamespacedId resolve(DSLContext context, Subject subject) throws SQLException {
         var namespace = resolve(context, subject.namespace());
         if (namespace == null) {
             return null;
@@ -587,7 +603,7 @@ abstract public class AbstractOracle implements Oracle {
         return new NamespacedId(namespace, resolved.value1(), relation.id());
     }
 
-    static Long resolveAdd(DSLContext context, Namespace namespace) throws SQLException {
+    public static Long resolveAdd(DSLContext context, Namespace namespace) throws SQLException {
         add(context, namespace);
         var resolved = context.select(NAMESPACE.ID)
                               .from(NAMESPACE)
@@ -599,7 +615,7 @@ abstract public class AbstractOracle implements Oracle {
         return resolved.value1();
     }
 
-    static NamespacedId resolveAdd(DSLContext context, Object object) throws SQLException {
+    public static NamespacedId resolveAdd(DSLContext context, Object object) throws SQLException {
         add(context, object);
         var namespace = resolveAdd(context, object.namespace());
         if (namespace == null) {
@@ -622,7 +638,7 @@ abstract public class AbstractOracle implements Oracle {
         return new NamespacedId(namespace, resolved.value1(), relation.id());
     }
 
-    static NamespacedId resolveAdd(DSLContext context, Relation relation) throws SQLException {
+    public static NamespacedId resolveAdd(DSLContext context, Relation relation) throws SQLException {
         add(context, relation);
         var namespace = resolveAdd(context, relation.namespace());
         if (namespace == null) {
@@ -638,7 +654,7 @@ abstract public class AbstractOracle implements Oracle {
         return new NamespacedId(namespace, resolved.value1(), 0L);
     }
 
-    static NamespacedId resolveAdd(DSLContext context, Subject subject) throws SQLException {
+    public static NamespacedId resolveAdd(DSLContext context, Subject subject) throws SQLException {
         add(context, subject);
         var namespace = resolveAdd(context, subject.namespace());
         if (namespace == null) {

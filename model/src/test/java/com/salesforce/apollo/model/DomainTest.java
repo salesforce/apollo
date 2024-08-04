@@ -144,7 +144,7 @@ public class DomainTest {
 
         // Users can View Document 123
         Assertion tuple = userMembers.assertion(object123View);
-        var t1 = retryNesting(() -> oracle.add(tuple), 3).get(120, TimeUnit.SECONDS).longValue();
+        var t1 = retryNesting(() -> oracle.add(tuple), 3).get(120, TimeUnit.SECONDS).ts().longValue();
         log.info("Users can view documents @ {}", t1);
 
         // Direct subjects that can View the document
@@ -159,7 +159,7 @@ public class DomainTest {
 
         // Assert flagged technicians can directly view the document
         Assertion grantTechs = flaggedTechnicianMembers.assertion(object123View);
-        var t2 = retryNesting(() -> oracle.add(grantTechs), 3).get(120, TimeUnit.SECONDS);
+        var t2 = retryNesting(() -> oracle.add(grantTechs), 3).get(120, TimeUnit.SECONDS).ts();
         log.info("flagged technicians can directly view documents @ {}", t2);
 
         // Now have 2 direct subjects that can view the doc

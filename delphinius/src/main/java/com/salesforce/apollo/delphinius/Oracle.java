@@ -30,9 +30,10 @@ public interface Oracle {
     /**
      * Add an Assertion. The subject and object of the assertion will also be added if they do not exist
      *
-     * @return the future returning the time value when this assertion is committed
+     * @return the future returning the Asserted value, containing the timestamp when this assertion was attempted, and
+     * whether the assertion was newly added or already existed.
      */
-    CompletableFuture<ULong> add(Assertion assertion);
+    CompletableFuture<Asserted> add(Assertion assertion);
 
     /**
      * Add a Namespace.
@@ -232,6 +233,9 @@ public interface Oracle {
      * @throws SQLException
      */
     Stream<Subject> subjects(Relation predicate, Object object) throws SQLException;
+
+    record Asserted(ULong ts, boolean added) {
+    }
 
     /** A Namespace **/
     record Namespace(String name) {

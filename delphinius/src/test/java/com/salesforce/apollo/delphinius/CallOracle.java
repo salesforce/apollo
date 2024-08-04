@@ -34,8 +34,8 @@ public class CallOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<ULong> add(Assertion assertion) {
-        var fs = new CompletableFuture<ULong>();
+    public CompletableFuture<Asserted> add(Assertion assertion) {
+        var fs = new CompletableFuture<Asserted>();
         try {
             var call = connection.prepareCall("call delphinius.addAssertion(?, ?, ?, ?, ?, ?, ?, ?) ");
             call.setString(1, assertion.subject().namespace().name());
@@ -47,9 +47,9 @@ public class CallOracle extends AbstractOracle {
             call.setString(7, assertion.object().relation().namespace().name());
             call.setString(8, assertion.object().relation().name());
 
-            call.execute();
+            var added = call.executeUpdate() != 0;
             connection.commit();
-            fs.complete(clock.get());
+            fs.complete(new Asserted(clock.get(), added));
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }

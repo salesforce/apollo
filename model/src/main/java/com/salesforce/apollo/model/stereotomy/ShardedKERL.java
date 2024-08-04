@@ -7,7 +7,6 @@
 package com.salesforce.apollo.model.stereotomy;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
@@ -18,6 +17,7 @@ import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.db.UniKERL;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -59,21 +59,22 @@ public class ShardedKERL extends UniKERL {
             return (byte[]) callResult.outValues.get(0);
         });
         try {
-            return b == null ? (KeyState) null : new KeyStateImpl(b.get());
+            return b == null ? null : new KeyStateImpl(b.get());
         } catch (InvalidProtocolBufferException e) {
             return null;
         } catch (ExecutionException e) {
             throw new RuntimeException(e);
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            Thread.currentThread().interrupt();
+            return null;
         }
     }
 
     @Override
     public Void append(List<AttachmentEvent> events) {
-        var call = mutator.call("{ ? = call stereotomy.appendAttachements(?) }",
+        var call = mutator.call("{ ? = call stereotomy.appendAttachments(?) }",
                                 Collections.singletonList(JDBCType.BINARY),
-                                events.stream().map(ae -> ae.getBytes()).toList());
+                                events.stream().map(AttachmentEvent::getBytes).toList());
         CompletableFuture<CallResult> submitted;
         try {
             submitted = mutator.execute(call, timeout);

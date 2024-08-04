@@ -12,8 +12,10 @@ import com.salesforce.apollo.state.Mutator;
 import org.joou.ULong;
 
 import java.sql.Connection;
+import java.sql.JDBCType;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
@@ -38,17 +40,18 @@ public class ShardedOracle extends AbstractOracle {
     }
 
     @Override
-    public CompletableFuture<ULong> add(Assertion assertion) {
-        var call = mutator.call("call delphinius.addAssertion(?, ?, ?, ?, ?, ?, ?, ?) ",
-                                assertion.subject().namespace().name(), assertion.subject().name(),
-                                assertion.subject().relation().namespace().name(),
+    public CompletableFuture<Asserted> add(Assertion assertion) {
+        var call = mutator.call("? = call delphinius.addAssertion(?, ?, ?, ?, ?, ?, ?, ?) ",
+                                Collections.singletonList(JDBCType.BOOLEAN), assertion.subject().namespace().name(),
+                                assertion.subject().name(), assertion.subject().relation().namespace().name(),
                                 assertion.subject().relation().name(), assertion.object().namespace().name(),
                                 assertion.object().name(), assertion.object().relation().namespace().name(),
                                 assertion.object().relation().name());
         try {
-            return mutator.execute(call, timeout).thenApply(r -> clock.get());
+            return mutator.execute(call, timeout)
+                          .thenApply(r -> new Asserted(clock.get(), (Boolean) r.outValues.getFirst()));
         } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<ULong>();
+            var f = new CompletableFuture<Asserted>();
             f.completeExceptionally(e);
             return f;
         }
@@ -104,7 +107,7 @@ public class ShardedOracle extends AbstractOracle {
         }
     }
 
-    public CompletableFuture<ULong> add(Assertion assertion, int retries) {
+    public CompletableFuture<Asserted> add(Assertion assertion, int retries) {
         return retryNesting(() -> add(assertion), retries);
     }
 
