@@ -19,6 +19,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+
+import com.salesforce.apollo.h2.SessionServices;
 import org.h2.api.ErrorCode;
 import org.h2.api.JavaObjectSerializer;
 import org.h2.command.Command;
@@ -64,6 +66,8 @@ import org.h2.value.VersionedValue;
 import org.h2.value.lob.LobData;
 import org.h2.value.lob.LobDataDatabase;
 import org.h2.value.lob.LobDataInMemory;
+
+import static com.salesforce.apollo.h2.SessionServices.NO_SERVICES;
 
 /**
  * A session represents an embedded database connection. When using the server
@@ -192,6 +196,8 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
 
     private TimeZoneProvider timeZone;
 
+    private SessionServices services = NO_SERVICES;
+
     /**
      * Tables marked for ANALYZE after the current transaction is committed.
      * Prevents us calling ANALYZE repeatedly in large transactions.
@@ -268,6 +274,14 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
                 : database.sysIdentifier(Constants.SCHEMA_MAIN);
         timeZone = DateTimeUtils.getTimeZone();
         sessionStart = DateTimeUtils.currentTimestamp(timeZone, commandStartOrEnd = DateTimeUtils.now());
+    }
+
+    public SessionServices getServices() {
+        return services;
+    }
+
+    public void setServices(SessionServices services) {
+        this.services = services;
     }
 
     public void setLazyQueryExecution(boolean lazyQueryExecution) {

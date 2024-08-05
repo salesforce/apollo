@@ -9,14 +9,7 @@
  */
 package com.salesforce.apollo.state;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-
+import com.salesforce.apollo.h2.SessionServices;
 import deterministic.org.h2.Driver;
 import deterministic.org.h2.engine.SessionLocal;
 import deterministic.org.h2.expression.Alias;
@@ -28,25 +21,67 @@ import deterministic.org.h2.result.LocalResult;
 import deterministic.org.h2.result.ResultInterface;
 import deterministic.org.h2.table.Column;
 import deterministic.org.h2.util.Utils;
-import deterministic.org.h2.value.DataType;
-import deterministic.org.h2.value.TypeInfo;
-import deterministic.org.h2.value.Value;
-import deterministic.org.h2.value.ValueNull;
-import deterministic.org.h2.value.ValueToObjectConverter;
+import deterministic.org.h2.value.*;
+
+import java.lang.reflect.Array;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 
 /**
- * There may be multiple Java methods that match a function name. Each method
- * must have a different number of parameters however. This helper class
- * represents one such method.
+ * There may be multiple Java methods that match a function name. Each method must have a different number of parameters
+ * however. This helper class represents one such method.
  */
 public class JavaMethod implements Comparable<JavaMethod> {
+    private final Method   method;
+    private       boolean  hasConnectionParam;
+    private       int      paramCount;
+    private       Class<?> varArgClass;
+    private boolean varArgs;
+    private boolean hasServicesParam;
+
+    JavaMethod(Method method) {
+        assert method != null;
+        this.method = method;
+        Class<?>[] paramClasses = method.getParameterTypes();
+        paramCount = paramClasses.length;
+        if (paramCount > 0) {
+            Class<?> paramClass = paramClasses[0];
+            if (Connection.class.isAssignableFrom(paramClass)) {
+                hasConnectionParam = true;
+                paramCount--;
+            }
+        }
+
+        if (this.paramCount > 0) {
+            Class<?> paramClass = paramClasses[paramClasses.length - this.paramCount];
+            if (SessionServices.class.isAssignableFrom(paramClass)) {
+                this.hasServicesParam = true;
+                --this.paramCount;
+            }
+        }
+        if (paramCount > 0) {
+            Class<?> lastArg = paramClasses[paramClasses.length - 1];
+            if (lastArg.isArray() && method.isVarArgs()) {
+                varArgs = true;
+                varArgClass = lastArg.getComponentType();
+            }
+        }
+    }
+
+
+    public boolean hasServicesParam() {
+        return this.hasServicesParam;
+    }
     /**
      * Create a result for the given result set.
      *
      * @param session the session
      * @param rs      the result set
-     * @param maxrows the maximum number of rows to read (0 to just read the meta
-     *                data)
+     * @param maxrows the maximum number of rows to read (0 to just read the meta data)
      * @return the value
      */
     public static ResultInterface resultSetToResult(SessionLocal session, ResultSet rs, int maxrows) {
@@ -63,11 +98,9 @@ public class JavaMethod implements Comparable<JavaMethod> {
                 int scale = meta.getScale(i + 1);
                 TypeInfo typeInfo;
                 if (columnType == Value.ARRAY && columnTypeName.endsWith(" ARRAY")) {
-                    typeInfo = TypeInfo.getTypeInfo(Value.ARRAY, -1L, 0,
-                                                    TypeInfo.getTypeInfo(DataType.getTypeByName(columnTypeName.substring(0,
-                                                                                                                         columnTypeName.length()
-                                                                                                                         - 6),
-                                                                                                session.getMode()).type));
+                    typeInfo = TypeInfo.getTypeInfo(Value.ARRAY, -1L, 0, TypeInfo.getTypeInfo(
+                    DataType.getTypeByName(columnTypeName.substring(0, columnTypeName.length() - 6),
+                                           session.getMode()).type));
                 } else {
                     typeInfo = TypeInfo.getTypeInfo(columnType, precision, scale, null);
                 }
@@ -90,34 +123,6 @@ public class JavaMethod implements Comparable<JavaMethod> {
             return result;
         } catch (SQLException e) {
             throw DbException.convert(e);
-        }
-    }
-
-    private boolean      hasConnectionParam;
-    private final Method method;
-    private int          paramCount;
-    private Class<?>     varArgClass;
-
-    private boolean varArgs;
-
-    JavaMethod(Method method) {
-        assert method != null;
-        this.method = method;
-        Class<?>[] paramClasses = method.getParameterTypes();
-        paramCount = paramClasses.length;
-        if (paramCount > 0) {
-            Class<?> paramClass = paramClasses[0];
-            if (Connection.class.isAssignableFrom(paramClass)) {
-                hasConnectionParam = true;
-                paramCount--;
-            }
-        }
-        if (paramCount > 0) {
-            Class<?> lastArg = paramClasses[paramClasses.length - 1];
-            if (lastArg.isArray() && method.isVarArgs()) {
-                varArgs = true;
-                varArgClass = lastArg.getComponentType();
-            }
         }
     }
 
@@ -146,9 +151,8 @@ public class JavaMethod implements Comparable<JavaMethod> {
     /**
      * Call the user-defined function and return the value.
      *
-     * @param session    the session
-     * @param args       the argument list
-     * @param columnList true if the function should only return the column list
+     * @param session the session
+     * @param args    the argument list
      * @return the value
      */
     public Object getValue(Object instance, SessionLocal session, Value[] args) {
@@ -160,10 +164,17 @@ public class JavaMethod implements Comparable<JavaMethod> {
             params[p++] = conn;
         }
 
+        if (this.hasServicesParam && params.length > 0) {
+            params[p++] = session.getServices();
+        }
+
         // allocate array for varArgs parameters
         Object varArg = null;
         if (varArgs) {
             int len = args.length - params.length + 1 + (hasConnectionParam ? 1 : 0);
+            if (this.hasServicesParam) {
+                --len;
+            }
             varArg = Array.newInstance(varArgClass, len);
             params[params.length - 1] = varArg;
         }
@@ -190,9 +201,8 @@ public class JavaMethod implements Comparable<JavaMethod> {
                         o = null;
                     }
                 } else {
-                    o = ValueToObjectConverter.valueToObject((Class<?>) (primitive ? Utils.getNonPrimitiveClass(paramClass)
-                                                                                   : paramClass),
-                                                             v, conn);
+                    o = ValueToObjectConverter.valueToObject(
+                    (Class<?>) (primitive ? Utils.getNonPrimitiveClass(paramClass) : paramClass), v, conn);
                 }
             }
             if (currentIsVarArg) {

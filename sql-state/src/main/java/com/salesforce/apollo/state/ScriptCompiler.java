@@ -161,7 +161,7 @@ public class ScriptCompiler {
             buff.append("package ").append(packageName).append(";\n");
         }
         int endImport = source.indexOf("@CODE");
-        String importCode = "import java.util.*;\n" + "import java.math.*;\n" + "import java.sql.*;\n";
+        String importCode = "import java.util.*;\n" + "import java.math.*;\n" + "import java.sql.*;\n" + "import com.salesforce.h2.*;\n";;
         if (endImport >= 0) {
             importCode = source.substring(0, endImport);
             source = source.substring("@CODE".length() + endImport);

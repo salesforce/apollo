@@ -19,6 +19,7 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.QualifiedBase64;
+import com.salesforce.apollo.h2.SessionServices;
 import com.salesforce.apollo.state.Mutator.BatchedTransactionException;
 import com.salesforce.apollo.state.liquibase.*;
 import com.salesforce.apollo.state.proto.Statement;
@@ -117,6 +118,7 @@ public class SqlStateMachine {
     private final EventTrampoline               trampoline     = new EventTrampoline();
     private final String                        url;
     private final Digest                        id;
+    private final Map<String, CallService>      services       = new HashMap<>();
     private       PreparedStatement             deleteEvents;
     private       PreparedStatement             getEvents;
     private       PreparedStatement             updateCurrent;
@@ -159,6 +161,33 @@ public class SqlStateMachine {
             } catch (SQLException e) {
                 log.error("Unable to set autocommit to false on: {}", id, e);
             }
+            ((SessionLocal) c.getSession()).setServices(new SessionServices() {
+                @Override
+                public <T> T call(String serviceName, Object... parameters) throws ServiceNotFoundException {
+                    var svc = services.get(serviceName);
+                    if (svc == null) {
+                        throw new ServiceNotFoundException(serviceName);
+                    }
+                    try {
+                        return (T) svc.call(parameters);
+                    } catch (Throwable e) {
+                        throw new IllegalStateException(e);
+                    }
+                }
+
+                @Override
+                public void run(String serviceName, Object... parameters) throws ServiceNotFoundException {
+                    var svc = services.get(serviceName);
+                    if (svc == null) {
+                        throw new ServiceNotFoundException(serviceName);
+                    }
+                    try {
+                        svc.call(parameters);
+                    } catch (Throwable e) {
+                        throw new IllegalStateException(e);
+                    }
+                }
+            });
             return c;
         });
     }
@@ -184,6 +213,10 @@ public class SqlStateMachine {
             connection().close();
         } catch (SQLException e) {
         }
+    }
+
+    public void deregister(String serviceName) {
+        services.remove(serviceName);
     }
 
     public void deregisterHandler() {
@@ -280,12 +313,20 @@ public class SqlStateMachine {
         return new Mutator(session, getSession());
     }
 
+    public SessionServices getServices() {
+        return getSession().getServices();
+    }
+
     public Connection newConnection() {
         try {
             return new ReadOnlyConnector(new JdbcConnection(getSession(), "", url), getSession());
         } catch (SQLException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    public void register(String serviceName, CallService callService) {
+        services.put(serviceName, callService);
     }
 
     public void register(Consumer<List<Event>> handler) {
@@ -847,6 +888,10 @@ public class SqlStateMachine {
             action.run();
             return null;
         }, log));
+    }
+
+    public interface CallService {
+        Object call(Object... params) throws Exception;
     }
 
     @FunctionalInterface
