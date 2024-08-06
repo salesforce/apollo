@@ -16,7 +16,7 @@ package gorgoneion;
 
 service Admissions {
   rpc apply (stereotomy.KERL_) returns (SignedNonce) {}
-  rpc register (Credentials) returns (stereotomy.Validations) {}
+  rpc register (Credentials) returns (Establishment) {}
 }
 
 service Endorsement {
@@ -62,4 +62,9 @@ message SignedAttestation {
 message Notarization {
   stereotomy.KERL_ kerl = 1;
   stereotomy.Validations validations = 2;
+}
+
+message Establishment {
+  stereotomy.Validations validations = 1;
+  google.protobuf.Any provisioning = 2;
 }

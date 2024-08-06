@@ -6,16 +6,15 @@
  */
 package com.salesforce.apollo.gorgoneion.comm.admissions;
 
-import com.salesforce.apollo.gorgoneion.proto.AdmissionsGrpc.AdmissionsImplBase;
-import com.salesforce.apollo.gorgoneion.proto.Credentials;
-import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesforce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
+import com.salesforce.apollo.gorgoneion.proto.AdmissionsGrpc.AdmissionsImplBase;
+import com.salesforce.apollo.gorgoneion.proto.Credentials;
+import com.salesforce.apollo.gorgoneion.proto.Establishment;
+import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.protocols.ClientIdentity;
-
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import io.grpc.stub.StreamObserver;
 
 /**
@@ -51,7 +50,7 @@ public class AdmissionsServer extends AdmissionsImplBase {
     }
 
     @Override
-    public void register(Credentials request, StreamObserver<Validations> responseObserver) {
+    public void register(Credentials request, StreamObserver<Establishment> responseObserver) {
         var timer = metrics == null ? null : metrics.registerDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
