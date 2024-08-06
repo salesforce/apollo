@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.gorgoneion;
 
-import com.salesforce.apollo.gorgoneion.proto.Credentials;
-import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesforce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.Link;
+import com.salesforce.apollo.gorgoneion.proto.Credentials;
+import com.salesforce.apollo.gorgoneion.proto.Establishment;
+import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -39,7 +39,7 @@ public interface Admissions extends Link {
             }
 
             @Override
-            public Validations register(Credentials credentials, Duration timeout) {
+            public Establishment register(Credentials credentials, Duration timeout) {
                 return null;
             }
         };
@@ -47,5 +47,5 @@ public interface Admissions extends Link {
 
     SignedNonce apply(KERL_ application, Duration timeout);
 
-    Validations register(Credentials credentials, Duration timeout);
+    Establishment register(Credentials credentials, Duration timeout);
 }

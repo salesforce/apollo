@@ -7,6 +7,7 @@
 package com.salesforce.apollo.gorgoneion.client;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -25,10 +26,10 @@ import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
+import com.salesforce.apollo.test.proto.ByteMessage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.security.SecureRandom;
@@ -60,6 +61,7 @@ public class GorgoneionClientTest {
         final var prefix = UUID.randomUUID().toString();
         var member = new ControlledIdentifierMember(stereotomy.newIdentifier());
         var b = DynamicContext.newBuilder();
+        final var testMessage = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("hello world")).build();
         b.setCardinality(1);
         var context = b.build();
         context.activate(member);
@@ -72,7 +74,8 @@ public class GorgoneionClientTest {
         var observer = mock(ProtoEventObserver.class);
         final var parameters = Parameters.newBuilder().setKerl(kerl).build();
         @SuppressWarnings("unused")
-        var gorgon = new Gorgoneion(true, t -> true, parameters, member, context, observer, gorgonRouter, null);
+        var gorgon = new Gorgoneion(true, t -> true, (c, v) -> Any.pack(testMessage), parameters, member, context,
+                                    observer, gorgonRouter, null);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());
@@ -91,18 +94,20 @@ public class GorgoneionClientTest {
         var admin = clientComminications.connect(member);
 
         assertNotNull(admin);
-        Function<SignedNonce, Any> attester = sn -> Any.getDefaultInstance();
+        Function<SignedNonce, Any> attested = _ -> Any.getDefaultInstance();
 
-        var gorgoneionClient = new GorgoneionClient(client, attester, parameters.clock(), admin);
+        var gorgoneionClient = new GorgoneionClient(client, attested, parameters.clock(), admin);
 
-        var invitation = gorgoneionClient.apply(Duration.ofSeconds(60));
+        var establishment = gorgoneionClient.apply(Duration.ofSeconds(60));
 
         gorgonRouter.close(Duration.ofSeconds(0));
         clientRouter.close(Duration.ofSeconds(0));
 
-        assertNotNull(invitation);
-        assertNotEquals(Validations.getDefaultInstance(), invitation);
-        assertEquals(1, invitation.getValidationsCount());
+        assertNotNull(establishment);
+        assertNotEquals(Validations.getDefaultInstance(), establishment);
+        assertEquals(1, establishment.getValidations().getValidationsCount());
+        assertEquals(testMessage.getContents(),
+                     establishment.getProvisioning().unpack(ByteMessage.class).getContents());
 
         // Verify client KERL published
 
@@ -134,11 +139,9 @@ public class GorgoneionClientTest {
         var countdown = new CountDownLatch(3);
         // The kerl observer to publish admitted client KERLs to
         var observer = mock(ProtoEventObserver.class);
-        doAnswer(new Answer<Void>() {
-            public Void answer(InvocationOnMock invocation) {
-                countdown.countDown();
-                return null;
-            }
+        doAnswer((Answer<Void>) invocation -> {
+            countdown.countDown();
+            return null;
         }).when(observer).publish(Mockito.any(), Mockito.anyList());
 
         var b = DynamicContext.newBuilder();
@@ -147,6 +150,7 @@ public class GorgoneionClientTest {
         for (ControlledIdentifierMember member : members) {
             context.activate(member);
         }
+        final var testMessage = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("hello world")).build();
         final var parameters = Parameters.newBuilder().setKerl(kerl).build();
         final var gorgoneions = members.stream()
                                        .map(m -> {
@@ -156,8 +160,9 @@ public class GorgoneionClientTest {
                                            return router;
                                        })
                                        .map(r -> new Gorgoneion(r.getFrom().equals(members.getFirst()), t -> true,
-                                                                parameters, (ControlledIdentifierMember) r.getFrom(),
-                                                                context, observer, r, null))
+                                                                (c, v) -> Any.pack(testMessage), parameters,
+                                                                (ControlledIdentifierMember) r.getFrom(), context,
+                                                                observer, r, null))
                                        .toList();
 
         // The registering client
@@ -177,16 +182,15 @@ public class GorgoneionClientTest {
         var admin = clientComminications.connect(members.getFirst());
 
         assertNotNull(admin);
-        Function<SignedNonce, Any> attester = sn -> {
-            return Any.getDefaultInstance();
-        };
+        Function<SignedNonce, Any> attester = sn -> Any.getDefaultInstance();
 
         var gorgoneionClient = new GorgoneionClient(client, attester, parameters.clock(), admin);
-        var invitation = gorgoneionClient.apply(Duration.ofSeconds(2_000));
-        assertNotNull(invitation);
-        assertNotEquals(Validations.getDefaultInstance(), invitation);
-        assertTrue(invitation.getValidationsCount() >= context.majority());
-
+        var establishment = gorgoneionClient.apply(Duration.ofSeconds(2_000));
+        assertNotNull(establishment);
+        assertNotEquals(Validations.getDefaultInstance(), establishment);
+        assertTrue(establishment.getValidations().getValidationsCount() >= context.majority());
+        assertEquals(testMessage.getContents(),
+                     establishment.getProvisioning().unpack(ByteMessage.class).getContents());
         assertTrue(countdown.await(1, TimeUnit.SECONDS));
     }
 }

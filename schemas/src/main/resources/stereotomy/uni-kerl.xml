@@ -1,42 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog
-	xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xmlns:pro="http://www.liquibase.org/xml/ns/pro"
-	xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
-      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
-	<changeSet author="hhildebrand" id="uni-kerl-1">
-		<sql>create alias stereotomy.initialize for
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+		xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd">
+    <changeSet author="hhildebrand" id="uni-kerl-1">
+        <sql>create
+        alias IF NOT EXISTS stereotomy.initialize for
 			"com.salesforce.apollo.stereotomy.db.UniKERL.initializeKERL"
-		</sql>
+        </sql>
 
-		<sql>create alias stereotomy.append for
+        <sql>create
+        alias IF NOT EXISTS stereotomy.append for
 			"com.salesforce.apollo.stereotomy.db.UniKERL.appendEvent"
-		</sql>
+        </sql>
 
-        <sql>create alias stereotomy.appendAttachments for
+        <sql>create
+        alias IF NOT EXISTS stereotomy.appendAttachments for
             "com.salesforce.apollo.stereotomy.db.UniKERL.appendAttachments"
         </sql>
 
         <sql>call stereotomy.initialize()</sql>
 
-        <sql>drop alias stereotomy.initialize</sql>
-        
+        <sql>drop
+        alias IF EXISTS stereotomy.initialize</sql>
+
         <!-- These two constraints are cyclical, so are defered until after the anchor NULL event and event coordinates are created -->
 
         <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="coordinates"
-            baseTableName="event" baseTableSchemaName="stereotomy"
-            constraintName="event_coordinates_fk"
-            referencedTableName="coordinates" referencedColumnNames="id"
-            referencedTableSchemaName="stereotomy" />
+                onDelete="CASCADE" baseColumnNames="coordinates"
+                baseTableName="event" baseTableSchemaName="stereotomy"
+                constraintName="event_coordinates_fk"
+                referencedTableName="coordinates" referencedColumnNames="id"
+                referencedTableSchemaName="stereotomy"/>
 
         <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="digest"
-            baseTableName="coordinates" baseTableSchemaName="stereotomy"
-            constraintName="coordinates_digest_fk"
-            referencedTableName="event" referencedColumnNames="digest"
-            referencedTableSchemaName="stereotomy" />
+                onDelete="CASCADE" baseColumnNames="digest"
+                baseTableName="coordinates" baseTableSchemaName="stereotomy"
+                constraintName="coordinates_digest_fk"
+                referencedTableName="event" referencedColumnNames="digest"
+                referencedTableSchemaName="stereotomy"/>
 
-	</changeSet>
+    </changeSet>
 </databaseChangeLog>

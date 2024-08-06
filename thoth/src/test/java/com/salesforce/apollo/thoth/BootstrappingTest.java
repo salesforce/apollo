@@ -7,6 +7,7 @@
 package com.salesforce.apollo.thoth;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -27,6 +28,7 @@ import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
+import com.salesforce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.utils.Utils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +58,7 @@ public class BootstrappingTest extends AbstractDhtTest {
 
     @Test
     public void smokin() throws Exception {
+        final var testMessage = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("hello world")).build();
         routers.values().forEach(r -> r.start());
         dhts.values().forEach(dht -> dht.start(LARGE_TESTS ? Duration.ofSeconds(100) : Duration.ofMillis(10)));
 
@@ -65,7 +68,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         gate.set(true);
         var gorgoneions = routers.values().stream().map(r -> {
             var k = dhts.get(r.getFrom()).asKERL();
-            return new Gorgoneion(r.getFrom().equals(dhts.firstKey()), t -> true,
+            return new Gorgoneion(r.getFrom().equals(dhts.firstKey()), t -> true, (c, v) -> Any.pack(testMessage),
                                   Parameters.newBuilder().setKerl(k).build(), (ControlledIdentifierMember) r.getFrom(),
                                   context, new DirectPublisher(r.getFrom().getId(), new ProtoKERLAdapter(k)), r, null);
         }).toList();
@@ -111,7 +114,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         final var invitation = gorgoneionClient.apply(Duration.ofSeconds(120));
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
-        assertTrue(invitation.getValidationsCount() >= context.majority());
+        assertTrue(invitation.getValidations().getValidationsCount() >= context.majority());
         // Verify client KERL published
         Utils.waitForCondition(30_000, 1000, () -> testKerl.getKeyEvent(client.getEvent().getCoordinates()) != null);
         var keyS = testKerl.getKeyEvent(client.getEvent().getCoordinates());

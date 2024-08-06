@@ -7,6 +7,7 @@
 package com.salesforce.apollo.gorgoneion;
 
 import com.codahale.metrics.Timer;
+import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
 import com.google.protobuf.Timestamp;
 import com.salesforce.apollo.archipelago.Router;
@@ -52,6 +53,7 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.*;
+import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
@@ -72,14 +74,17 @@ public class Gorgoneion {
     private final Predicate<SignedAttestation>                          verifier;
     private final boolean                                               bootstrap;
     private final ScheduledExecutorService                              scheduler;
+    private final BiFunction<Credentials, Validations, Any>             provisioner;
 
-    public Gorgoneion(boolean bootstrap, Predicate<SignedAttestation> verifier, Parameters parameters,
+    public Gorgoneion(boolean bootstrap, Predicate<SignedAttestation> verifier,
+                      BiFunction<Credentials, Validations, Any> provisioner, Parameters parameters,
                       ControlledIdentifierMember member, Context<Member> context, ProtoEventObserver observer,
                       Router router, GorgoneionMetrics metrics) {
-        this(bootstrap, verifier, parameters, member, context, observer, router, metrics, router);
+        this(bootstrap, verifier, provisioner, parameters, member, context, observer, router, metrics, router);
     }
 
-    public Gorgoneion(boolean bootstrap, Predicate<SignedAttestation> verifier, Parameters parameters,
+    public Gorgoneion(boolean bootstrap, Predicate<SignedAttestation> verifier,
+                      BiFunction<Credentials, Validations, Any> provisioner, Parameters parameters,
                       ControlledIdentifierMember member, Context<Member> context, ProtoEventObserver observer,
                       Router admissionsRouter, GorgoneionMetrics metrics, Router endorsementRouter) {
         this.bootstrap = bootstrap;
@@ -88,6 +93,7 @@ public class Gorgoneion {
         this.context = context;
         this.parameters = parameters;
         this.observer = observer;
+        this.provisioner = provisioner;
         this.scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
 
         admissionsComm = admissionsRouter.create(member, context.getId(), new Admit(), ":admissions",
@@ -139,6 +145,13 @@ public class Gorgoneion {
 
     private void enroll(Notarization request) {
         observer.publish(request.getKerl(), Collections.singletonList(request.getValidations()));
+    }
+
+    private Establishment establish(Credentials credentials, Validations validations) {
+        return Establishment.newBuilder()
+                            .setValidations(validations)
+                            .setProvisioning(provisioner.apply(credentials, validations))
+                            .buildPartial();
     }
 
     private SignedNonce generateNonce(KERL_ application) {
@@ -242,7 +255,7 @@ public class Gorgoneion {
         return result;
     }
 
-    private Validations register(Credentials request) {
+    private Establishment register(Credentials request) {
         final var kerl = request.getAttestation().getAttestation().getKerl();
         final var identifier = identifier(kerl);
         if (identifier == null) {
@@ -280,7 +293,7 @@ public class Gorgoneion {
             }
         }, parameters.frequency());
         try {
-            return validated.thenCompose(v -> notarize(request, v)).get();
+            return validated.thenCompose(v -> notarize(request, v)).thenApply(v -> establish(request, v)).get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;
@@ -336,7 +349,7 @@ public class Gorgoneion {
         }
 
         @Override
-        public void register(Credentials request, Digest from, StreamObserver<Validations> responseObserver,
+        public void register(Credentials request, Digest from, StreamObserver<Establishment> responseObserver,
                              Timer.Context timer) {
             if (!validate(request, from)) {
                 log.warn("Invalid credentials from: {} on: {}", from, member.getId());
@@ -345,12 +358,12 @@ public class Gorgoneion {
                 return;
             }
             try {
-                Validations invite = Gorgoneion.this.register(request);
-                if (invite == null) {
+                var estalishment = Gorgoneion.this.register(request);
+                if (estalishment == null) {
                     responseObserver.onError(
                     new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
                 } else {
-                    responseObserver.onNext(invite);
+                    responseObserver.onNext(estalishment);
                     responseObserver.onCompleted();
                 }
             } catch (StatusRuntimeException e) {

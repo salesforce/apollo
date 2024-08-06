@@ -7,6 +7,7 @@
 package com.salesforce.apollo.gorgoneion;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.Timestamp;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -24,6 +25,7 @@ import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
+import com.salesforce.apollo.test.proto.ByteMessage;
 import org.junit.jupiter.api.Test;
 
 import java.security.SecureRandom;
@@ -41,6 +43,7 @@ public class GorgoneionTest {
 
     @Test
     public void smokin() throws Exception {
+        final var testMessage = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("hello world")).build();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
@@ -59,8 +62,9 @@ public class GorgoneionTest {
         // The kerl observer to publish admitted client KERLs to
         var observer = mock(ProtoEventObserver.class);
         @SuppressWarnings("unused")
-        var gorgon = new Gorgoneion(true, t -> true, Parameters.newBuilder().setKerl(kerl).build(), member, context,
-                                    observer, gorgonRouter, null);
+        var gorgon = new Gorgoneion(true, t -> true, (c, v) -> Any.pack(testMessage),
+                                    Parameters.newBuilder().setKerl(kerl).build(), member, context, observer,
+                                    gorgonRouter, null);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());
@@ -101,23 +105,25 @@ public class GorgoneionTest {
                                            .setAttestation(attestationDocument)
                                            .build();
 
-        var invitation = admin.register(Credentials.newBuilder()
-                                                   .setAttestation(SignedAttestation.newBuilder()
-                                                                                    .setAttestation(attestation)
-                                                                                    .setSignature(client.sign(
-                                                                                    attestation.toByteString()).toSig())
-                                                                                    .build())
-                                                   .setNonce(fs)
-                                                   .build(), Duration.ofSeconds(1));
+        var establishment = admin.register(Credentials.newBuilder()
+                                                      .setAttestation(SignedAttestation.newBuilder()
+                                                                                       .setAttestation(attestation)
+                                                                                       .setSignature(client.sign(
+                                                                                                           attestation.toByteString())
+                                                                                                           .toSig())
+                                                                                       .build())
+                                                      .setNonce(fs)
+                                                      .build(), Duration.ofSeconds(1));
         gorgonRouter.close(Duration.ofSeconds(0));
         clientRouter.close(Duration.ofSeconds(0));
-        assertNotNull(invitation);
-        assertNotEquals(Validations.getDefaultInstance(), invitation);
-        assertEquals(1, invitation.getValidationsCount());
-
+        assertNotNull(establishment);
+        assertNotEquals(Validations.getDefaultInstance(), establishment);
+        assertEquals(1, establishment.getValidations().getValidationsCount());
+        assertEquals(testMessage.getContents(),
+                     establishment.getProvisioning().unpack(ByteMessage.class).getContents());
         // Verify client KERL published
 
         // Because this is a minimal test, the notarization is not published
-        //        verify(observer, times(3)).publish(cKerl, Collections.singletonList(invitation));
+        //        verify(observer, times(3)).publish(cKerl, Collections.singletonList(establishment));
     }
 }

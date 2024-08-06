@@ -8,14 +8,10 @@ package com.salesforce.apollo.gorgoneion.client;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
-import com.salesforce.apollo.gorgoneion.proto.Attestation;
-import com.salesforce.apollo.gorgoneion.proto.Credentials;
-import com.salesforce.apollo.gorgoneion.proto.SignedAttestation;
-import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesforce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.gorgoneion.client.client.comm.Admissions;
+import com.salesforce.apollo.gorgoneion.proto.*;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,7 +38,7 @@ public class GorgoneionClient {
         this.client = client;
     }
 
-    public Validations apply(Duration timeout) {
+    public Establishment apply(Duration timeout) {
         KERL_ application = member.kerl();
         var fs = client.apply(application, timeout);
         Credentials credentials = credentials(fs);
