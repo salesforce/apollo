@@ -272,8 +272,7 @@ integrated.
 Apollo is using Aleph-BFT for consensus, in the form of the Ethereal module. CHOAM has now replaced Consortium, and the
 SQL replicated state machine now uses CHOAM for its linear log and transaction model.
 
-Multi-tenant shards are in place and being worked upon currently. This integrates Stereotomy and Delphinius using CHOAM.
-An E2E test of the ReBAC Delphinius service is in development being tested. Full integration of ProcessDomains using
-Fireflies discovery is in development.
-
-
+Multi-tenant shards are in place and apparently working. This integrates Stereotomy and Delphinius using CHOAM in
+a Domain model. E2E testinsg of the ReBAC Delphinius service is finished and working. Full integration of ProcessDomains
+using
+Fireflies discovery works from bootstrap to Delphinius Oracle ReBAC E2E testing.
