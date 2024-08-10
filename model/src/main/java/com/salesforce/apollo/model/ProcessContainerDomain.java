@@ -13,7 +13,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.model.demesnes.JniBridge;
-import com.salesforce.apollo.model.demesnes.comm.DemesneKERLServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
 import com.salesforce.apollo.stereotomy.event.Seal;
@@ -26,7 +25,6 @@ import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import io.grpc.BindableService;
 import io.grpc.ManagedChannel;
-import io.grpc.Server;
 import io.grpc.netty.DomainSocketNegotiatorHandler;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -41,7 +39,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
@@ -61,8 +62,6 @@ public class ProcessContainerDomain extends ProcessDomain {
     private final        Path                                                      communicationsDirectory;
     private final        EventLoopGroup                                            contextEventLoopGroup = IMPL.getEventLoopGroup();
     private final        Map<Digest, Demesne>                                      hostedDomains         = new ConcurrentHashMap<>();
-    private final        DomainSocketAddress                                       outerContextEndpoint;
-    private final        Server                                                    outerContextService;
     private final        Portal<Member>                                            portal;
     private final        DomainSocketAddress                                       portalEndpoint;
     private final        EventLoopGroup                                            portalEventLoopGroup  = IMPL.getEventLoopGroup();
@@ -91,19 +90,6 @@ public class ProcessContainerDomain extends ProcessDomain {
                                                                 .bossEventLoopGroup(portalEventLoopGroup)
                                                                 .intercept(new DomainSocketServerInterceptor()),
                               s -> handler(portalEndpoint), bridge, Duration.ofMillis(1), s -> routes.get(s));
-        outerContextEndpoint = new DomainSocketAddress(
-        communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
-        outerContextService = NettyServerBuilder.forAddress(outerContextEndpoint)
-                                                .executor(Executors.newVirtualThreadPerTaskExecutor())
-                                                .protocolNegotiator(
-                                                new DomainSocketNegotiatorHandler.DomainSocketNegotiator(IMPL))
-                                                .withChildOption(ChannelOption.TCP_NODELAY, true)
-                                                .channelType(IMPL.getServerDomainSocketChannelClass())
-                                                .addService(new DemesneKERLServer(dht, null))
-                                                .addService(outerContextService())
-                                                .workerEventLoopGroup(contextEventLoopGroup)
-                                                .bossEventLoopGroup(contextEventLoopGroup)
-                                                .build();
         this.subDomainSpecification = subDomainSpecification;
     }
 
@@ -112,7 +98,6 @@ public class ProcessContainerDomain extends ProcessDomain {
         final var cloned = prototype.clone();
         var parameters = cloned.setCommDirectory(communicationsDirectory.toString())
                                .setPortal(portalEndpoint.path())
-                               .setParent(outerContextEndpoint.path())
                                .build();
         var ctxId = Digest.from(parameters.getContext());
         final AtomicBoolean added = new AtomicBoolean();
@@ -155,31 +140,12 @@ public class ProcessContainerDomain extends ProcessDomain {
             throw new IllegalStateException(
             "Unable to start portal, local address: " + bridge.path() + " on: " + params.member().getId());
         }
-        try {
-            outerContextService.start();
-        } catch (IOException e) {
-            throw new IllegalStateException(
-            "Unable to start outer context service, local address: " + outerContextEndpoint.path() + " on: "
-            + params.member().getId());
-        }
     }
 
     @Override
     protected void stopServices() {
         super.stopServices();
         portal.close(Duration.ofSeconds(30));
-        try {
-            outerContextService.shutdown();
-        } catch (RejectedExecutionException e) {
-            // eat
-        } catch (Throwable t) {
-            log.error("Exception shutting down process domain: {}", member.getId(), t);
-        }
-        try {
-            outerContextService.awaitTermination(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
         hostedDomains.values().forEach(d -> d.stop());
         var portalELG = portalEventLoopGroup.shutdownGracefully();
         var serverELG = contextEventLoopGroup.shutdownGracefully();
