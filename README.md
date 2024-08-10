@@ -174,7 +174,7 @@ _grpc/target/generated-sources/protobuf/java_ . For JOOQ, the root directory is 
 /target/generated-sources/jooq_ .
 
 Again, I stress that because these generated source directories are under the "(module dir)/target" directory, they are
-removed during the "clean" phase of Maven and consequently must be regenerated in order to compile the rest of the
+removed during the "clean" phase of Maven and consequently must be regenerated to compile the rest of the
 build.
 
 Note that adding these generated source directories to the compiler path is automatically taken care of in the Maven
