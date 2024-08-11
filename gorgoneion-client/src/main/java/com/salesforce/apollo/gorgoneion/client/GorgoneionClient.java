@@ -29,13 +29,20 @@ public class GorgoneionClient {
     private final Admissions                 client;
     private final Clock                      clock;
     private final ControlledIdentifierMember member;
+    private final PublicKey_                 sessionKey;
 
     public GorgoneionClient(ControlledIdentifierMember member, Function<SignedNonce, Any> attester, Clock clock,
                             Admissions client) {
+        this(member, attester, clock, client, null);
+    }
+
+    public GorgoneionClient(ControlledIdentifierMember member, Function<SignedNonce, Any> attester, Clock clock,
+                            Admissions client, PublicKey_ sessionKey) {
         this.member = member;
         this.attester = attester;
         this.clock = clock;
         this.client = client;
+        this.sessionKey = sessionKey;
     }
 
     public Establishment apply(Duration timeout) {
@@ -66,6 +73,10 @@ public class GorgoneionClient {
         KERL_ kerl = member.kerl();
         var attestation = attester.apply(nonce);
         var sa = attestation(nonce, attestation);
-        return Credentials.newBuilder().setNonce(nonce).setAttestation(sa).build();
+        var builder = Credentials.newBuilder().setNonce(nonce).setAttestation(sa);
+        if (sessionKey != null) {
+            builder.setSessionKey(sessionKey);
+        }
+        return builder.build();
     }
 }

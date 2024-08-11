@@ -50,7 +50,7 @@ public class ControlledIdentifierMember implements SigningMember {
     public boolean equals(Object obj) {
         if (this == obj)
             return true;
-        if ((obj == null) || !(obj instanceof Member))
+        if (!(obj instanceof Member))
             return false;
         return id.equals(((Member) obj).getId());
     }

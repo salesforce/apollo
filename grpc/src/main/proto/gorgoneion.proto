@@ -45,6 +45,7 @@ message Nonce {
 message Credentials {
   SignedNonce nonce = 1;
   SignedAttestation attestation = 2;
+  PublicKey_ sessionKey = 3;
 }
 
 message Attestation {
@@ -67,4 +68,14 @@ message Notarization {
 message Establishment {
   stereotomy.Validations validations = 1;
   google.protobuf.Any provisioning = 2;
+}
+
+message PublicKey_ {
+  enum algo {
+    INVALID = 0;
+    X25519 = 1;
+    X448 = 2;
+  }
+  algo algorithm = 1;
+  bytes publicKey = 2;
 }
