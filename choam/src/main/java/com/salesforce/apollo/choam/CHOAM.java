@@ -591,7 +591,7 @@ public class CHOAM {
                 log.debug("Invalid block: {} hash: {} height: {} on: {}", next.block.getBodyCase(), next.hash,
                           next.height(), params.member().getId());
             }
-        } else if (h.height().compareTo(next.height()) > 0) {
+        } else if (h.height().compareTo(next.height()) < 0) {
             log.trace("Premature block: {} : {} height: {} current: {} on: {}", next.block.getBodyCase(), next.hash,
                       next.height(), cur.height(), params.member().getId());
             pending.add(next);

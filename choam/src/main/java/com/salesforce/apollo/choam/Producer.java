@@ -60,14 +60,16 @@ public class Producer {
     private final        AtomicBoolean                assembled          = new AtomicBoolean(false);
     private final        AtomicInteger                epoch              = new AtomicInteger(-1);
     private final        AtomicInteger                preblocks          = new AtomicInteger();
+    private final        HashedCertifiedBlock         initialBlock;
 
-    public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint, String label,
-                    ScheduledExecutorService scheduler) {
+    public Producer(Digest nextViewId, ViewContext view, HashedCertifiedBlock lastBlock,
+                    HashedCertifiedBlock checkpoint, String label, ScheduledExecutorService scheduler) {
         assert view != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
         this.checkpoint.set(checkpoint);
         this.nextViewId = nextViewId;
+        initialBlock = lastBlock;
 
         final Parameters params = view.params();
         final var producerParams = params.producer();
@@ -271,7 +273,7 @@ public class Producer {
                    .stream()
                    .filter(pb -> pb.published.get())
                    .max(Comparator.comparing(pb -> pb.block.height()))
-                   .ifPresent(pb -> publish(pb, true));
+                   .ifPresentOrElse(pb -> publish(pb, true), () -> view.publish(initialBlock, true));
             return;
         }
         log.trace("transactions: {} combined hash: {} height: {} on: {}", txns.size(),
