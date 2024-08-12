@@ -24,11 +24,6 @@ public class MockMember implements Member {
     }
 
     @Override
-    public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-        return null;
-    }
-
-    @Override
     public Digest getId() {
         return id;
     }

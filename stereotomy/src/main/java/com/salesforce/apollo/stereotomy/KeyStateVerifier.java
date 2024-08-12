@@ -21,14 +21,6 @@ public abstract class KeyStateVerifier<D extends Identifier> implements Verifier
         this.identifier = identifier;
     }
 
-    @Override
-    public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-        var verifier = verifierFor(signature.getSequenceNumber());
-        return verifier.isEmpty() ? new Filtered(false, 0,
-                                                 new JohnHancock(signature.getAlgorithm(), new byte[] {}, ULong.MIN))
-                                  : verifier.get().filtered(threshold, signature, message);
-    }
-
     public D identifier() {
         return identifier;
     }
@@ -36,13 +28,13 @@ public abstract class KeyStateVerifier<D extends Identifier> implements Verifier
     @Override
     public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
         var verifier = verifierFor(signature.getSequenceNumber());
-        return verifier.isEmpty() ? false : verifier.get().verify(threshold, signature, message);
+        return verifier.isPresent() && verifier.get().verify(threshold, signature, message);
     }
 
     @Override
     public boolean verify(JohnHancock signature, InputStream message) {
         var verifier = verifierFor(signature.getSequenceNumber());
-        return verifier.isEmpty() ? false : verifier.get().verify(signature, message);
+        return verifier.isPresent() && verifier.get().verify(signature, message);
     }
 
     protected abstract KeyState getKeyState(ULong sequenceNumber);

@@ -8,10 +8,7 @@ package com.salesforce.apollo.stereotomy.processing;
 
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
-import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
-import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,21 +21,6 @@ import java.util.Map;
  */
 public interface KeyEventVerifier {
     Logger log = LoggerFactory.getLogger(KeyEventVerifier.class);
-
-    default JohnHancock verifyAuthentication(KeyState state, KeyEvent event, JohnHancock signatures, KEL kel) {
-        KeyEvent lookup = kel.getKeyEvent(state.getLastEstablishmentEvent());
-        if (lookup == null) {
-            throw new MissingEstablishmentEventException(event, state.getLastEstablishmentEvent());
-        }
-        var kee = (EstablishmentEvent) lookup;
-        var filtered = new DefaultVerifier(kee.getKeys()).filtered(kee.getSigningThreshold(), signatures,
-                                                                   event.getBytes());
-        if (!filtered.verified()) {
-            throw new UnmetSigningThresholdException(event);
-        }
-
-        return filtered.filtered();
-    }
 
     default Map<Integer, JohnHancock> verifyEndorsements(KeyState state, KeyEvent event,
                                                          Map<Integer, JohnHancock> receipts) {

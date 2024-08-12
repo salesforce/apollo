@@ -24,28 +24,6 @@ import java.util.Map;
 public interface Verifier {
     Verifier NO_VERIFIER = new NoVerifier();
 
-    default Filtered filtered(SigningThreshold threshold, JohnHancock signature, byte[]... message) {
-        return filtered(threshold, signature, BbBackedInputStream.aggregate(message));
-    }
-
-    default Filtered filtered(SigningThreshold threshold, JohnHancock signature, ByteBuffer... message) {
-        return filtered(threshold, signature, BbBackedInputStream.aggregate(message));
-    }
-
-    default Filtered filtered(SigningThreshold threshold, JohnHancock signature, ByteString... message) {
-        return filtered(threshold, signature, BbBackedInputStream.aggregate(message));
-    }
-
-    Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message);
-
-    default Filtered filtered(SigningThreshold threshold, JohnHancock signature, List<ByteBuffer> forSigning) {
-        return filtered(threshold, signature, BbBackedInputStream.aggregate(forSigning));
-    }
-
-    default Filtered filtered(SigningThreshold threshold, JohnHancock signature, String message) {
-        return filtered(threshold, signature, BbBackedInputStream.aggregate(message.getBytes()));
-    }
-
     default boolean verify(JohnHancock signature, byte[]... message) {
         return verify(signature, BbBackedInputStream.aggregate(message));
     }
@@ -126,11 +104,6 @@ public interface Verifier {
         }
 
         @Override
-        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return signature.filter(threshold, keys, message);
-        }
-
-        @Override
         public String toString() {
             return "V[" + keys.values().stream().map(k -> ":" + DigestAlgorithm.DEFAULT.digest(k.getEncoded())).toList()
             + "]";
@@ -150,11 +123,6 @@ public interface Verifier {
     class NoVerifier implements Verifier {
 
         @Override
-        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return new Filtered(false, signature.signatureCount(), signature);
-        }
-
-        @Override
         public String toString() {
             return "<No Verifier>";
         }
@@ -171,11 +139,6 @@ public interface Verifier {
     }
 
     class MockVerifier implements Verifier {
-
-        @Override
-        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return new Filtered(true, signature.signatureCount(), signature);
-        }
 
         @Override
         public boolean verify(JohnHancock signature, InputStream message) {

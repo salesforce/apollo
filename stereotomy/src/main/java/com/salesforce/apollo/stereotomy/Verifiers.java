@@ -37,10 +37,6 @@ public interface Verifiers {
 
         Verifier v() {
             return new Verifier() {
-                @Override
-                public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-                    return new Filtered(false, 0, null);
-                }
 
                 @Override
                 public boolean verify(JohnHancock signature, InputStream message) {

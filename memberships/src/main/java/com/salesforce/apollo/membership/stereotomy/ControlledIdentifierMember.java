@@ -55,15 +55,6 @@ public class ControlledIdentifierMember implements SigningMember {
         return id.equals(((Member) obj).getId());
     }
 
-    @Override
-    public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-        var verifier = identifier.getVerifier();
-        if (verifier.isEmpty()) {
-            return null;
-        }
-        return verifier.get().filtered(threshold, signature, message);
-    }
-
     public CertificateWithPrivateKey getCertificateWithPrivateKey(Instant validFrom, Duration valid,
                                                                   SignatureAlgorithm signatureAlgorithm) {
         return identifier.provision(validFrom, valid, signatureAlgorithm);

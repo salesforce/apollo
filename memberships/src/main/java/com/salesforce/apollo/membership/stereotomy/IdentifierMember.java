@@ -43,11 +43,6 @@ public class IdentifierMember implements Member {
     }
 
     @Override
-    public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-        return verifier().filtered(threshold, signature, message);
-    }
-
-    @Override
     public Digest getId() {
         return id;
     }

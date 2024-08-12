@@ -978,17 +978,8 @@ public class View {
                       .build();
     }
 
-    private Verifier.Filtered filtered(SelfAddressingIdentifier id, SigningThreshold threshold, JohnHancock signature,
-                                       InputStream message) {
-        var verifier = verifiers.verifierFor(id);
-        if (verifier.isEmpty()) {
-            return new Verifier.Filtered(false, 0, null);
-        }
-        return verifier.get().filtered(threshold, signature, message);
-    }
-
     /**
-     * Garbage collect the member. Member is now shunned and cannot recover
+     * Garbage collects the member. Member is now shunned and cannot recover
      *
      * @param member
      */
@@ -1701,12 +1692,6 @@ public class View {
                 return compareTo(m) == 0;
             }
             return false;
-        }
-
-        @Override
-        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            final var current = note;
-            return View.this.filtered(getIdentifier(), threshold, signature, message);
         }
 
         public int getAccusationCount() {

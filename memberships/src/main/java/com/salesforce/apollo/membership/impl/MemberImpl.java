@@ -6,22 +6,22 @@
  */
 package com.salesforce.apollo.membership.impl;
 
-import static com.salesforce.apollo.membership.Member.getMemberIdentifier;
-import static com.salesforce.apollo.membership.Member.getSigningKey;
-
-import java.io.InputStream;
-import java.security.PublicKey;
-import java.security.cert.X509Certificate;
-
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.membership.Member;
 
+import java.io.InputStream;
+import java.security.PublicKey;
+import java.security.cert.X509Certificate;
+
+import static com.salesforce.apollo.membership.Member.getMemberIdentifier;
+import static com.salesforce.apollo.membership.Member.getSigningKey;
+
 /**
  * A member of the view
- * 
+ *
  * @author hal.hildebrand
  * @since 220
  */
@@ -89,7 +89,7 @@ public class MemberImpl implements Member {
 
     @Override
     public String toString() {
-        return "Member" + id + "";
+        return "Member" + id;
     }
 
     /**
@@ -98,11 +98,6 @@ public class MemberImpl implements Member {
     @Override
     public boolean verify(JohnHancock signature, InputStream message) {
         return new DefaultVerifier(new PublicKey[] { signingKey }).verify(signature, message);
-    }
-
-    @Override
-    public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-        return new DefaultVerifier(new PublicKey[] { signingKey }).filtered(threshold, signature, message);
     }
 
     @Override
