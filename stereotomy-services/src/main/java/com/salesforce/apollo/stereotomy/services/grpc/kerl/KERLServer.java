@@ -8,11 +8,11 @@ package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
 import com.salesforce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceImplBase;
-import com.salesforce.apollo.archipelago.RoutableService;
-import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import io.grpc.stub.StreamObserver;
 
@@ -262,6 +262,29 @@ public class KERLServer extends KERLServiceImplBase {
                 final var serializedSize = state.getSerializedSize();
                 metrics.outboundBandwidth().mark(serializedSize);
                 metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
+            }
+        });
+    }
+
+    @Override
+    public void getKeyStateSeqNum(IdentAndSeq request, StreamObserver<KeyState_> responseObserver) {
+        Context timer = metrics != null ? metrics.getKeyStateService().time() : null;
+        if (metrics != null) {
+            final var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetKeyStateRequest().mark(serializedSize);
+        }
+        routing.evaluate(responseObserver, s -> {
+            var response = s.getKeyStateSeqNum(request);
+            if (timer != null) {
+                timer.stop();
+            }
+            var state = response == null ? KeyState_.getDefaultInstance() : response;
+            responseObserver.onNext(state);
+            responseObserver.onCompleted();
+            if (metrics != null) {
+                metrics.outboundBandwidth().mark(state.getSerializedSize());
+                metrics.outboundGetKeyStateResponse().mark(state.getSerializedSize());
             }
         });
     }

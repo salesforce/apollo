@@ -7,6 +7,7 @@
 package com.salesforce.apollo.stereotomy.services.proto;
 
 import com.salesforce.apollo.stereotomy.event.proto.*;
+import org.joou.ULong;
 
 /**
  * @author hal.hildebrand
@@ -20,14 +21,15 @@ public interface ProtoKERLProvider {
 
     KeyState_ getKeyState(EventCoords coordinates);
 
-    KeyState_ getKeyState(Ident identifier, long sequenceNumber);
+    KeyState_ getKeyState(Ident identifier, ULong sequenceNumber);
 
     KeyState_ getKeyState(Ident identifier);
+
+    KeyState_ getKeyStateSeqNum(IdentAndSeq request);
 
     KeyStateWithAttachments_ getKeyStateWithAttachments(EventCoords coords);
 
     KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(EventCoords coordinates);
 
     Validations getValidations(EventCoords coords);
-
 }

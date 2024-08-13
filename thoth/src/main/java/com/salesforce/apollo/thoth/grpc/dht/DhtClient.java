@@ -16,6 +16,7 @@ import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.thoth.proto.KerlDhtGrpc;
+import org.joou.ULong;
 
 import java.io.IOException;
 import java.util.List;
@@ -100,7 +101,7 @@ public class DhtClient implements DhtService {
 
             @Override
             public KeyState_ getKeyState(IdentAndSeq identAndSeq) {
-                return service.getKeyState(identAndSeq.getIdentifier(), identAndSeq.getSequenceNumber());
+                return service.getKeyState(identAndSeq.getIdentifier(), ULong.valueOf(identAndSeq.getSequenceNumber()));
             }
 
             @Override

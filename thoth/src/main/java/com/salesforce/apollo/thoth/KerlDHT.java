@@ -536,17 +536,20 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     @Override
-    public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
-        var operation = "getKeyState(%s, %s)".formatted(Identifier.from(identifier), ULong.valueOf(sequenceNumber));
-        log.warn("{} on: {}", operation, member.getId());
+    public KeyState_ getKeyState(Ident identifier, ULong sequenceNumber) {
         if (identifier == null) {
             return KeyState_.getDefaultInstance();
         }
+        var operation = "getKeyState(%s, %s)".formatted(Identifier.from(identifier), sequenceNumber);
+        log.warn("{} on: {}", operation, member.getId());
         Digest digest = digestAlgorithm().digest(identifier.toByteString());
         if (digest == null) {
             return KeyState_.getDefaultInstance();
         }
-        var identAndSeq = IdentAndSeq.newBuilder().setIdentifier(identifier).setSequenceNumber(sequenceNumber).build();
+        var identAndSeq = IdentAndSeq.newBuilder()
+                                     .setIdentifier(identifier)
+                                     .setSequenceNumber(sequenceNumber.longValue())
+                                     .build();
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
@@ -589,6 +592,44 @@ public class KerlDHT implements ProtoKERLService {
         var slice = context.bftSubset(digest);
         var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         iter.iterate(link -> link.getKeyState(identifier),
+                     (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, operation),
+                     () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
+        try {
+            return result.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.warn("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
+                return KeyState_.getDefaultInstance();
+            }
+            throw new IllegalStateException(e.getCause());
+        }
+    }
+
+    @Override
+    public KeyState_ getKeyStateSeqNum(IdentAndSeq request) {
+        var identifier = request.getIdentifier();
+        var sequenceNumber = request.getSequenceNumber();
+        var operation = "getKeyState(%s, %s)".formatted(Identifier.from(identifier), ULong.valueOf(sequenceNumber));
+        log.warn("{} on: {}", operation, member.getId());
+        if (identifier == null) {
+            return KeyState_.getDefaultInstance();
+        }
+        Digest digest = digestAlgorithm().digest(identifier.toByteString());
+        if (digest == null) {
+            return KeyState_.getDefaultInstance();
+        }
+        var identAndSeq = IdentAndSeq.newBuilder().setIdentifier(identifier).setSequenceNumber(sequenceNumber).build();
+        Instant timedOut = Instant.now().plus(operationTimeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<KeyState_>();
+        HashMultiset<KeyState_> gathered = HashMultiset.create();
+        var slice = context.bftSubset(digest);
+        var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
+        iter.iterate(link -> link.getKeyState(identAndSeq),
                      (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, digest,
                                                                    isTimedOut, destination, operation),
                      () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
@@ -1113,9 +1154,9 @@ public class KerlDHT implements ProtoKERLService {
         }
 
         @Override
-        public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
+        public KeyState_ getKeyState(Ident identifier, ULong sequenceNumber) {
             if (log.isTraceEnabled()) {
-                log.trace("get key state for {}:{} on: {}", Identifier.from(identifier), ULong.valueOf(sequenceNumber),
+                log.trace("get key state for {}:{} on: {}", Identifier.from(identifier), sequenceNumber,
                           member.getId());
             }
             return complete(k -> k.getKeyState(identifier, sequenceNumber));
@@ -1125,6 +1166,11 @@ public class KerlDHT implements ProtoKERLService {
         public KeyState_ getKeyState(Ident identifier) {
             log.trace("get key state for identifier on: {}", member.getId());
             return complete(k -> k.getKeyState(identifier));
+        }
+
+        @Override
+        public KeyState_ getKeyStateSeqNum(IdentAndSeq request) {
+            return getKeyState(request.getIdentifier(), ULong.valueOf(request.getSequenceNumber()));
         }
 
         @Override

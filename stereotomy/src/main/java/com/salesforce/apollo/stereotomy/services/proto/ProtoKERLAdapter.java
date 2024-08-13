@@ -134,8 +134,8 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     }
 
     @Override
-    public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
-        KeyState ks = kerl.getKeyState(Identifier.from(identifier), ULong.valueOf(sequenceNumber));
+    public KeyState_ getKeyState(Ident identifier, ULong sequenceNumber) {
+        KeyState ks = kerl.getKeyState(Identifier.from(identifier), sequenceNumber);
         return ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_();
     }
 
@@ -143,6 +143,11 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     public KeyState_ getKeyState(Ident identifier) {
         KeyState ks = kerl.getKeyState(Identifier.from(identifier));
         return ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_();
+    }
+
+    @Override
+    public KeyState_ getKeyStateSeqNum(IdentAndSeq request) {
+        return getKeyState(request.getIdentifier(), ULong.valueOf(request.getSequenceNumber()));
     }
 
     @Override

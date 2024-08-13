@@ -112,7 +112,7 @@ public class KERLAdapter implements KERL.AppendKERL {
 
     @Override
     public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
-        var keyState = kerl.getKeyState(identifier.toIdent(), sequenceNumber.longValue());
+        var keyState = kerl.getKeyState(identifier.toIdent(), sequenceNumber);
         return keyState == null ? null : new KeyStateImpl(keyState);
     }
 

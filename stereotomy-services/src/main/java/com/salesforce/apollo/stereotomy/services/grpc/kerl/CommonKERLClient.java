@@ -13,6 +13,7 @@ import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import org.joou.ULong;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -84,13 +85,18 @@ public class CommonKERLClient implements ProtoKERLService {
             }
 
             @Override
-            public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
+            public KeyState_ getKeyState(Ident identifier, ULong sequenceNumber) {
                 return service.getKeyState(identifier, sequenceNumber);
             }
 
             @Override
             public KeyState_ getKeyState(Ident identifier) {
                 return service.getKeyState(identifier);
+            }
+
+            @Override
+            public KeyState_ getKeyStateSeqNum(IdentAndSeq request) {
+                return service.getKeyStateSeqNum(request);
             }
 
             @Override
@@ -308,9 +314,12 @@ public class CommonKERLClient implements ProtoKERLService {
     }
 
     @Override
-    public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
+    public KeyState_ getKeyState(Ident identifier, ULong sequenceNumber) {
         Context timer = metrics == null ? null : metrics.getKeyStateClient().time();
-        var identAndSeq = IdentAndSeq.newBuilder().setIdentifier(identifier).setSequenceNumber(sequenceNumber).build();
+        var identAndSeq = IdentAndSeq.newBuilder()
+                                     .setIdentifier(identifier)
+                                     .setSequenceNumber(sequenceNumber.longValue())
+                                     .build();
         if (metrics != null) {
             final var bs = identAndSeq.getSerializedSize();
             metrics.outboundBandwidth().mark(bs);
@@ -340,6 +349,29 @@ public class CommonKERLClient implements ProtoKERLService {
             metrics.outboundGetKeyStateRequest().mark(bs);
         }
         var result = client.getKeyState(identifier);
+        if (timer != null) {
+            timer.stop();
+        }
+        KeyState_ ks;
+        ks = result;
+        if (timer != null) {
+            final var serializedSize = ks.getSerializedSize();
+            timer.stop();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetKeyStateCoordsResponse().mark(serializedSize);
+        }
+        return ks.equals(KeyState_.getDefaultInstance()) ? null : ks;
+    }
+
+    @Override
+    public KeyState_ getKeyStateSeqNum(IdentAndSeq request) {
+        Context timer = metrics == null ? null : metrics.getKeyStateClient().time();
+        if (metrics != null) {
+            final var bs = request.getSerializedSize();
+            metrics.outboundBandwidth().mark(bs);
+            metrics.outboundGetKeyStateRequest().mark(bs);
+        }
+        var result = client.getKeyStateSeqNum(request);
         if (timer != null) {
             timer.stop();
         }

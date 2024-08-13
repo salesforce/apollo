@@ -523,12 +523,13 @@ abstract public class UniKERL implements DigestKERL {
 
     @Override
     public KeyState getKeyState(Identifier identifier) {
+        final var identBytes = b64(identifier.toIdent());
         var result = dsl.select(EVENT.CURRENT_STATE)
                         .from(EVENT)
                         .join(CURRENT_KEY_STATE)
                         .on(EVENT.COORDINATES.eq(CURRENT_KEY_STATE.CURRENT))
                         .join(IDENTIFIER)
-                        .on(IDENTIFIER.PREFIX.eq(b64(identifier.toIdent())))
+                        .on(IDENTIFIER.PREFIX.eq(identBytes))
                         .where(CURRENT_KEY_STATE.IDENTIFIER.eq(IDENTIFIER.ID))
                         .fetchOptional()
                         .map(r -> {

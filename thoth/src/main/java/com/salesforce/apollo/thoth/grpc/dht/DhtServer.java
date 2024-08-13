@@ -17,6 +17,7 @@ import com.salesforce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import org.joou.ULong;
 
 /**
  * @author hal.hildebrand
@@ -317,7 +318,7 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
         }
         routing.evaluate(responseObserver, s -> {
-            var response = s.getKeyState(request.getIdentifier(), request.getSequenceNumber());
+            var response = s.getKeyState(request.getIdentifier(), ULong.valueOf(request.getSequenceNumber()));
             if (response == null) {
                 if (timer != null) {
                     timer.stop();
