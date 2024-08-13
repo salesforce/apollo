@@ -183,6 +183,11 @@
             </dependency>
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
+                <artifactId>vm-socket</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
                 <artifactId>isolates</artifactId>
                 <version>${project.version}</version>
                 <classifier>jar-with-dependencies</classifier>
